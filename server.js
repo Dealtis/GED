@@ -22,7 +22,8 @@ var smtpConfig = {
 };
 
 //cleaning temp
-new CronJob('0 */60 * * * *', function() {
+new CronJob('0 */120 * * * *', function() {
+  console.log("Clean /temp");
     fs.readdir('temp/', function(err, data) {
         if (err) {
             console.log("readir" + err);
@@ -170,7 +171,7 @@ fs.readFile('mail/error.html', function(err, html) {
         subject: 'GED Erreur {{societe}}!',
         html: html
     }, {
-        from: 'vanardois.romain@gmail.com',
+        from: 'rvanardois@dealtis.fr',
     });
 
     exports.sendErrorMsg = function(societe, errCode) {

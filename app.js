@@ -59,7 +59,7 @@ try {
                             var schtrait = _.find(traitementList, {
                                 'soc': soc
                             });
-                            console.log(schtrait);
+                            //console.log(schtrait);
                             if (schtrait == undefined) {
 
                                 //push array traitement
@@ -278,67 +278,73 @@ function splitJpg(path) {
     }
 }
 
-new CronJob('0 */1 * * * *', function() {
-    console.log("DL START");
-    conn.pool.getConnection(function(err, connection) {
-        // connected! (unless `err` is set)
 
-        connection.query('select CODEDI from import_calva2 where NOTOK = 0 GROUP BY CODEDI',
-            function(err, rowsoc, fields) {
-                if (err) {
-                    console.log(err.code);
-                    throw err;
-                }
-                rowsoc.forEach(function(rowsoc) {
-                    //row.societe_name
-                    console.log(rowsoc.CODEDI);
 
-                    connection.query("select * from import_calva2 where NOTOK = 0 AND CODEDI = '" + rowsoc.CODEDI + "'",
-                        function(err, rows, fields) {
-                            if (err) {
-                                console.log(err.code);
-                                throw err;
-                            }
-                            rows.forEach(function(row) {
-                                    //row.societe_name
-                                    var download = function(uri, filename, callback) {
-                                        request.head(uri, function(err, res, body) {
-                                            try {
-                                                console.log('content-type:', res.headers['content-type']);
 
-                                                switch (res.headers['content-type']) {
-                                                    case "image/jpeg":
-                                                        filenameFormat = filename + ".jpg";
-                                                        break;
-                                                    case "image/tiff":
-                                                        filenameFormat = filename + ".tif";
-                                                        break;
-                                                    case "image/gif":
-                                                        filenameFormat = filename + ".gif";
-                                                        break;
-                                                    case "image/png":
-                                                        filenameFormat = filename + ".png";
-                                                        break;
-                                                    case "application/pdf":
-                                                        filenameFormat = filename + ".pdf";
-                                                        break;
-                                                    default:
-                                                }
+//new CronJob('0 */1 * * * *', function() {
+console.log("DL START");
+conn.pool.getConnection(function(err, connection) {
+    // connected! (unless `err` is set)
 
-                                                request(uri).pipe(fs.createWriteStream(filenameFormat)).on('close', callback);
-                                            } catch (e) {
-                                              //console.log(e);
-                                            }
-                                        });
-                                    };
-                                    //NUMEQUINOXE, URL_EQUINOXE, CODEDI, NOTOK
-                                    download(row.URL_EQUINOXE, 'dl/' + row.NUMEQUINOXE + '_' + row.CODEDI, function() {
-                                        console.log('done');
-                                    });
-                                })
-                        });
-                })
-                connection.release();
-            });
-    });
-}, null, false, 'Europe/Paris');
+    connection.query('select CODEDI from ged_import where NOTOK = 0 GROUP BY CODEDI',
+        function(err, rowsoc, fields) {
+            if (err) {
+                console.log(err.code);
+                throw err;
+            }
+            rowsoc.forEach(function(rowsoc) {
+                //row.societe_name
+                console.log(rowsoc.CODEDI);
+                connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + rowsoc.CODEDI + "'",
+                    function(err, rows, fields) {
+                        if (err) {
+                            console.log(err.code);
+                            throw err;
+                        }
+                        rows.forEach(function(row) {
+                            //row.societe_name
+                            var download = function(uri, filename, callback) {
+                                request.head(uri, function(err, res, body) {
+                                    try {
+                                        switch (res.headers['content-type']) {
+                                            case "image/jpeg":
+                                                filenameFormat = filename + ".jpg";
+                                                break;
+                                            case "image/tiff":
+                                                filenameFormat = filename + ".tif";
+                                                break;
+                                            case "image/gif":
+                                                filenameFormat = filename + ".gif";
+                                                break;
+                                            case "image/png":
+                                                filenameFormat = filename + ".png";
+                                                break;
+                                            case "application/pdf":
+                                                filenameFormat = filename + ".pdf";
+                                                break;
+                                            default:
+                                        }
+
+                                        request(uri).pipe(fs.createWriteStream(filenameFormat).on('error', handler)).on('close', callback);
+
+                                        function handler(err) {
+                                          console.log("handler : ");
+                                            console.log(err)
+                                        }
+                                    } catch (e) {
+                                        console.log(e);
+                                    }
+                                });
+                            };
+                            //NUMEQUINOXE, URL_EQUINOXE, CODEDI, NOTOK
+                            download(row.URL_EQUINOXE, 'dl/' + row.NUMEQUINOXE + '_' + row.CODEDI, function() {
+                                console.log('done');
+                                //update database
+                            });
+                        })
+                    });
+            })
+            connection.release();
+        });
+});
+//}, null, false, 'Europe/Paris');

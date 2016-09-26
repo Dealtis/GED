@@ -56,11 +56,11 @@ exports.trait = function(liste, soc, path) {
                                 debugger;
                                 exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
                             }, 1000);
-                            console.log(error);
+                            //console.log(error);
                             //callback(null);
                         } else {
                             var trimstdout = _.trim(stdout);
-                            console.log(trimstdout);
+                            //console.log(trimstdout);
                             if (trimstdout.indexOf("POLE") > -1) {
                                 var codeb = _.replace(trimstdout, 'POLE', '');
                                 pos.statut = 60;
@@ -87,10 +87,10 @@ exports.trait = function(liste, soc, path) {
                                             if (err) {
                                                 pos.statut = "danger";
                                                 sock.majTrait(pos);
+                                                // TODO
+                                                //send mail pour informer que les infos sont inconnu
 
-                                                //norelease
-                                                throw err;
-                                            }
+                                            }else
                                             pos.numdoc = lines[0].NUM_DOC;
                                             pos.CODEDI = s.CODEDI;
                                             pos.remettant = lines[0].PROPRIETE;
@@ -135,12 +135,7 @@ exports.trait = function(liste, soc, path) {
                     pos.statut = 60;
                     pos.codeb = codeb;
                     sock.majTrait(pos);
-
-                    // setTimeout(function() {
-                    //     fs.unlink(path + filename + '.jpg', (err) => {
-                    //         if (err) throw err;
-                    //     });
-                    // }, 2000);
+                    
                     conn.pool.getConnection(function(err, connection) {
                         // connected! (unless `err` is set)
                         if (err) {
@@ -308,7 +303,7 @@ exports.trait = function(liste, soc, path) {
             }
             fs.mkdir("archive/" + soc + "/" + dname, function(e) {
                 if (!e || (e && e.code === 'EEXIST')) {
-                    exec('convert ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error, stdout, stderr) {
+                    exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error, stdout, stderr) {
                         if (error) {
                             console.log("error sur le onvert en archive " + err);
                             //throw err;
@@ -365,7 +360,7 @@ function insertBDD(positions) {
                         sock.majTrait(pos);
                     });
                 } else {
-                    console.log("insert " + item.numequinoxe);
+                    //console.log("insert " + item.numequinoxe);
                     item.doc.forEach(function(row) {
                         var pos = {
                             "filename": row.originFile,
@@ -414,66 +409,45 @@ function traitRenvoie(ftp, item, soc, remettant) {
                     //if multi true
                     if (ftp.multi) {
                         exec('pdftk' + pdftojoin + " cat output temp/" + item.numequinoxe + ".pdf", function(error, stdout, stderr) {
-
                             //put en fct de la ftp.nomenclature
-                            var nomenclatureFile = getNomenclatureFile(ftp.nomenclature, item);
+                            putFtp(getNomenclatureFile(ftp.nomenclature, item));
 
-                            c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
-                                if (err) {
-                                    console.log(err);
-                                    throw err;
-                                }
-                                c.end();
-                            });
-
-                            if (remettant) {
-                                //if item.remettant  want return, find ftp config and send
-                                var r = _.find(societe, {
-                                    'societe': item.remettant
-                                });
-
-                                if (r != undefined) {
-                                    var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
-                                    var ftpR = JSON.parse(ftpRJSON);
-                                    if (ftpR.renvoieremettant) {
-                                        traitRenvoie(ftp, item, item.remettant, false);
-                                    }
-                                }
-                            }
                         });
                     } else {
                         item.doc.forEach(function(row, index) {
                             //put en fct de la ftp.nomenclature
-                            var nomenclatureFile = getNomenclatureFile(ftp.nomenclature, item, index);
-
-                            c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
-                                if (err) {
-                                    console.log(err);
-                                    throw err;
-                                }
-                                c.end();
-                            });
-
-                            if (remettant) {
-                                //if item.remettant  want return, find ftp config and send
-                                var r = _.find(societe, {
-                                    'societe': item.remettant
-                                });
-
-                                if (r != undefined) {
-                                    var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
-                                    var ftpR = JSON.parse(ftpRJSON);
-                                    if (ftpR.renvoieremettant) {
-                                        traitRenvoie(ftp, item, item.remettant, false);
-                                    }
-                                }
-                            }
+                            putFtp(getNomenclatureFile(ftp.nomenclature, item, index));
                         });
                     }
                     break;
                 default:
             }
         });
+
+        function putFtp(nomenclatureFile) {
+          c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
+              if (err) {
+                  console.log(err);
+                  throw err;
+              }
+              c.end();
+          });
+
+          if (remettant) {
+              //if item.remettant  want return, find ftp config and send
+              var r = _.find(societe, {
+                  'societe': item.remettant
+              });
+
+              if (r != undefined) {
+                  var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
+                  var ftpR = JSON.parse(ftpRJSON);
+                  if (ftpR.renvoieremettant) {
+                      traitRenvoie(ftp, item, item.remettant, false);
+                  }
+              }
+          }
+        }
 
         c.connect({
             host: ftp.host,
