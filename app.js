@@ -8,6 +8,7 @@ var exec = require('child_process').exec,
     child;
 var traitement = require('./traitement');
 var request = require('request');
+var async = require('async');
 var CronJob = require('cron').CronJob;
 
 
@@ -292,17 +293,17 @@ conn.pool.getConnection(function(err, connection) {
                 console.log(err.code);
                 throw err;
             }
-            rowsoc.forEach(function(rowsoc) {
-                //row.societe_name
-                console.log(rowsoc.CODEDI);
-                connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + rowsoc.CODEDI + "'",
+
+            async.eachSeries(rowsoc, function(soc, callback) {
+
+                console.log(soc.CODEDI);
+                connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + soc.CODEDI + "'",
                     function(err, rows, fields) {
                         if (err) {
                             console.log(err.code);
                             throw err;
                         }
-                        rows.forEach(function(row) {
-                            //row.societe_name
+                        async.eachSeries(rows, function(row, callback) {
                             var download = function(uri, filename, callback) {
                                 request.head(uri, function(err, res, body) {
                                     try {
@@ -324,27 +325,52 @@ conn.pool.getConnection(function(err, connection) {
                                                 break;
                                             default:
                                         }
-
-                                        request(uri).pipe(fs.createWriteStream(filenameFormat).on('error', handler)).on('close', callback);
-
-                                        function handler(err) {
-                                          console.log("handler : ");
-                                            console.log(err)
-                                        }
+                                        //TODO handle error
+                                        request(uri).pipe(fs.createWriteStream(filenameFormat)).on('close', callback);
                                     } catch (e) {
-                                        console.log(e);
+                                        //console.log(e);
                                     }
                                 });
                             };
                             //NUMEQUINOXE, URL_EQUINOXE, CODEDI, NOTOK
                             download(row.URL_EQUINOXE, 'dl/' + row.NUMEQUINOXE + '_' + row.CODEDI, function() {
                                 console.log('done');
-                                //update database
+                                callback();
+                                //insert database get info ???
+
+                                connection.query('INSERT INTO ged_doc (numequinoxe, numdoc, societe, CODEDI, datescan, remettant, doc) VALUES (?, ?, ?, ? ,? ,? ,?)', [item.numequinoxe, item.numdoc, item.societe, item.CODEDI, date, item.remettant, JSON.stringify(item.doc)], function(err, result) {
+                                    if (err) {
+                                        console.log(err);
+                                    }
+                                    sock.sendErrorMsg(soc, "noBarcode");
+                                });
                             });
-                        })
+                        }, function(err) {
+                            if (err) {
+                                console.log('A file failed to process');
+                            } else {
+                                console.log('All files have been processed successfully');
+                                callback();
+                            }
+                        });
                     });
-            })
+            }, function(err) {
+                if (err) {
+                    console.log('A file failed to process');
+                } else {
+                    console.log('All society have been processed successfully');
+                }
+            });
             connection.release();
         });
 });
+
+function elloo() {
+
+};
+
+
+
+
+
 //}, null, false, 'Europe/Paris');
