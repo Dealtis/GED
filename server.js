@@ -7,7 +7,7 @@ var exec = require('child_process').exec,
 var scribe = require('scribe-js')();
 var conn = require('./conn');
 var CronJob = require('cron').CronJob;
-//clean temp
+
 var console = process.console;
 
 const nodemailer = require('nodemailer');
@@ -72,9 +72,28 @@ var mailData = {
 app.use(express.static('release'));
 console.log("(▀¯▀) GED POLE START (▀¯▀)");
 
+
 var server = app.listen(3030, function() {});
 
 app.use('/logs', scribe.webPanel());
+
+
+//Create a Console2 for express
+//with logs saved in /expressLogger
+var expressConsole = scribe.console({
+    console: {
+        colors: 'white',
+        timeColors: ['grey', 'underline'],
+    },
+    createBasic: false,
+    logWriter: {
+        rootPath: 'expressLogger'
+    }
+});
+
+expressConsole.addLogger('info');
+
+app.use(scribe.express.logger(expressConsole));
 
 //getfile
 app.get('/ged/:numequinoxe', function(req, res) {

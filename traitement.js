@@ -36,7 +36,7 @@ conn.pool.getConnection(function(err, connection) {
 });
 
 exports.trait = function(liste, soc, path) {
-    console.log("Lancement du traitement de " + soc);
+    console.info("Lancement du traitement de " + soc);
     // Array to hold async tasks
     var asyncTasks = [];
     // Loop through some items
@@ -54,10 +54,9 @@ exports.trait = function(liste, soc, path) {
                     //if error retry
                     if (error) {
                         setTimeout(function() {
-                            debugger;
                             exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
                         }, 1000);
-                        //console.log(error);
+                        console.error(error);
                         //callback(null);
                     } else {
                         var trimstdout = _.trim(stdout);
@@ -71,8 +70,7 @@ exports.trait = function(liste, soc, path) {
                                 setTimeout(function() {
                                     fs.unlink(pos.jpgfile, (err) => {
                                         if (err) {
-                                            debugger;
-                                            console.log("err jPp = " + err);
+                                            console.error(err);
                                             throw err;
                                         }
                                     });
@@ -81,7 +79,7 @@ exports.trait = function(liste, soc, path) {
                             conn.pool.getConnection(function(err, connection) {
                                 // connected! (unless `err` is set)
                                 if (err) {
-                                    console.log(err);
+                                    console.error(err);
                                 }
                                 if (!(codeb == "noBarcodes")) {
                                     connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
@@ -113,9 +111,7 @@ exports.trait = function(liste, soc, path) {
                                 setTimeout(function() {
                                     fs.unlink(pos.jpgfile, (err) => {
                                         if (err) {
-                                            debugger;
-                                            console.log("err jPp = " + err);
-                                            throw err;
+                                            console.error(err);
                                         }
                                     });
                                 }, 1000);
@@ -168,7 +164,7 @@ exports.trait = function(liste, soc, path) {
                         try {
                             exec('convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg', function(error, stdout, stderr) {
                                 if (error) {
-                                    console.log(error);
+                                    console.error(error);
                                 }
                                 var pos = {
                                     "filename": entry,
@@ -181,9 +177,7 @@ exports.trait = function(liste, soc, path) {
                                 callback(null, pos);
                             });
                         } catch (e) {
-                            console.log(e);
-                            console.log("Une erreur est survenu lors du convert");
-                            throw e;
+                            console.error(e);
                         }
                     } else {
                         var pos = {
@@ -223,163 +217,159 @@ exports.trait = function(liste, soc, path) {
     });
 }; //trait end
 
-//new CronJob('0 */1 * * * *', function() {
-console.log("DL START");
-conn.pool.getConnection(function(err, connection) {
-    // connected! (unless `err` is set)
+new CronJob('0 */1 * * * *', function() {
+    console.info("Téléchargement des fichers commencer");
+    conn.pool.getConnection(function(err, connection) {
+        // connected! (unless `err` is set)
 
-    connection.query('select CODEDI from ged_import where NOTOK = 0 GROUP BY CODEDI',
-        function(err, rowsoc, fields) {
-            if (err) {
-                console.log(err.code);
-                throw err;
-            }
+        connection.query('select CODEDI from ged_import where NOTOK = 0 GROUP BY CODEDI',
+            function(err, rowsoc, fields) {
+                if (err) {
+                    console.error(err);
+                }
 
-            async.eachSeries(rowsoc, function(soc, callback) {
-                    console.log(soc.CODEDI);
-                    var soc;
-                    connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + soc.CODEDI + "' LIMIT 10",
-                        function(err, rows, fields) {
-                            if (err) {
-                                console.log(err.code);
-                                throw err;
-                            }
-                            var dataPos = [];
-                            async.eachSeries(rows, function(row, callback) {
-                                    var download = function(uri, filename, callback) {
-                                        request.head(uri, function(err, res, body) {
-                                            try {
-                                                switch (res.headers['content-type']) {
-                                                    case "image/jpeg":
-                                                        filenameFormat = filename + ".jpg";
-                                                        break;
-                                                    case "image/tiff":
-                                                        filenameFormat = filename + ".tif";
-                                                        break;
-                                                    case "image/gif":
-                                                        filenameFormat = filename + ".gif";
-                                                        break;
-                                                    case "image/png":
-                                                        filenameFormat = filename + ".png";
-                                                        break;
-                                                    case "application/pdf":
-                                                        filenameFormat = filename + ".pdf";
-                                                        break;
-                                                    default:
+                async.eachSeries(rowsoc, function(soc, callback) {
+                        console.info(soc.CODEDI);
+                        var soc;
+                        connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + soc.CODEDI + "' LIMIT 10",
+                            function(err, rows, fields) {
+                                if (err) {
+                                    console.error(err);
+                                }
+                                var dataPos = [];
+                                async.eachSeries(rows, function(row, callback) {
+                                        var download = function(uri, filename, callback) {
+                                            request.head(uri, function(err, res, body) {
+                                                try {
+                                                    switch (res.headers['content-type']) {
+                                                        case "image/jpeg":
+                                                            filenameFormat = filename + ".jpg";
+                                                            break;
+                                                        case "image/tiff":
+                                                            filenameFormat = filename + ".tif";
+                                                            break;
+                                                        case "image/gif":
+                                                            filenameFormat = filename + ".gif";
+                                                            break;
+                                                        case "image/png":
+                                                            filenameFormat = filename + ".png";
+                                                            break;
+                                                        case "application/pdf":
+                                                            filenameFormat = filename + ".pdf";
+                                                            break;
+                                                        default:
+                                                    }
+
+                                                    //TODO handle error
+                                                    request(uri).pipe(
+                                                        fs.createWriteStream(filenameFormat).on('error', function(err) {
+                                                            console.log("ERROR:" + err);
+                                                            //TODO if error send error
+                                                            //sock.sendErrorMsg();
+
+                                                        })).on('close', callback(null, filenameFormat));
+
+                                                } catch (e) {
+                                                    console.error(e);
                                                 }
+                                            });
+                                        };
 
-                                                //TODO handle error
-                                                request(uri).pipe(
-                                                    fs.createWriteStream(filenameFormat).on('error', function(err) {
-                                                        console.log("ERROR:" + err);
-                                                        //TODO if error send error
-                                                        //sock.sendErrorMsg();
+                                        //NUMEQUINOXE, URL_EQUINOXE, CODEDI, NOTOK
+                                        download(row.URL_EQUINOXE, 'dl/' + row.NUMEQUINOXE + '_' + row.CODEDI + '_' + Date.now(), function(err, filenameFormat) {
 
-                                                    })).on('close', callback(null, filenameFormat));
+                                            callback();
 
-                                            } catch (e) {
-                                                //console.log(e);
-                                            }
-                                        });
-                                    };
-
-                                    //NUMEQUINOXE, URL_EQUINOXE, CODEDI, NOTOK
-                                    download(row.URL_EQUINOXE, 'dl/' + row.NUMEQUINOXE + '_' + row.CODEDI + '_' + Date.now(), function(err, filenameFormat) {
-
-                                        callback();
-
-                                        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + row.NUMEQUINOXE + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
-                                            if (err) {
-                                                //norelease
-                                                throw err;
-                                            }
-                                            if (lines == 0) {
-                                                console.log("erreur sur les infos");
-                                            } else {
-                                                var s = _.find(societe, {
-                                                    'CODEDI': row.CODEDI
-                                                });
-
-                                                if (s != undefined) {
-                                                    soc = s.societe;
-                                                    var filenameArray = filenameFormat.split("/");
-                                                    console.log(filenameArray[1]);
-                                                    var pos = {
-                                                        "filename": filenameArray[1],
-                                                        "codeb": row.NUMEQUINOXE,
-                                                        "numdoc": lines[0].NUM_DOC,
-                                                        "CODEDI": row.CODEDI,
-                                                        "remettant": lines[0].PROPRIETE
-                                                    };
-
-                                                    dataPos.push(pos);
+                                            connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + row.NUMEQUINOXE + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
+                                                if (err) {
+                                                    //norelease
+                                                    throw err;
+                                                }
+                                                if (lines == 0) {
+                                                    console.warning("Informations introuvable pour "+ row.NUMEQUINOXE +" de "+row.CODEDI);
                                                 } else {
-                                                    connection.query('SELECT NOM_SOCIETE FROM societe WHERE COD_EDI = ?', [row.CODEDI], function(err, rows, fields) {
-                                                        if (err) {
-                                                            console.log(err);
-                                                            throw err;
-                                                        }
-                                                        rows.forEach(function(line) {
-                                                            var addsociete = {
-                                                                "societe": line.NOM_SOCIETE,
-                                                                "CODEDI": row.CODEDI,
-                                                                "NEIF": "O"
-                                                            };
-                                                            societe.push(addsociete);
-
-                                                            connection.query('INSERT INTO ged_societe (societe_name, societe_CODEDI, societe_NEIF) VALUES (?, ?, ?)', [line.NOM_SOCIETE, row.CODEDI, "0"], function(err, result) {
-                                                                if (err) {
-                                                                    console.log(err);
-                                                                }
-                                                                var s = _.find(societe, {
-                                                                    'CODEDI': row.CODEDI
-                                                                });
-                                                                soc = s.societe;
-                                                                var filenameArray = filenameFormat.split("/");
-                                                                console.log(filenameArray[1]);
-                                                                var pos = {
-                                                                    "filename": filenameArray[1],
-                                                                    "codeb": row.NUMEQUINOXE,
-                                                                    "numdoc": lines[0].NUM_DOC,
-                                                                    "CODEDI": row.CODEDI,
-                                                                    "remettant": lines[0].PROPRIETE
-                                                                };
-
-                                                                dataPos.push(pos);
-                                                            });
-                                                        })
-
+                                                    var s = _.find(societe, {
+                                                        'CODEDI': row.CODEDI
                                                     });
 
-                                                }
-                                            }
-                                        });
-                                    });
-                                },
-                                function(err) {
-                                    if (err) {
-                                        console.log('A file failed to process');
-                                    } else {
-                                        console.log('All files have been processed successfully');
-                                        callback();
+                                                    if (s != undefined) {
+                                                        soc = s.societe;
+                                                        var filenameArray = filenameFormat.split("/");
+                                                        var pos = {
+                                                            "filename": filenameArray[1],
+                                                            "codeb": row.NUMEQUINOXE,
+                                                            "numdoc": lines[0].NUM_DOC,
+                                                            "CODEDI": row.CODEDI,
+                                                            "remettant": lines[0].PROPRIETE
+                                                        };
 
-                                        var dname = getDname();
-                                        archivage(dataPos, "dl/", dname, soc, archiveCallback)
-                                    }
-                                });
-                        });
-                },
-                function(err) {
-                    if (err) {
-                        console.log('A file failed to process');
-                    } else {
-                        console.log('All society have been processed successfully');
-                    }
-                });
-            connection.release();
-        });
-});
-//}, null, false, 'Europe/Paris');
+                                                        dataPos.push(pos);
+                                                    } else {
+                                                        connection.query('SELECT NOM_SOCIETE FROM societe WHERE COD_EDI = ?', [row.CODEDI], function(err, rows, fields) {
+                                                            if (err) {
+                                                                console.error(err);
+                                                            }
+                                                            rows.forEach(function(line) {
+                                                                var addsociete = {
+                                                                    "societe": line.NOM_SOCIETE,
+                                                                    "CODEDI": row.CODEDI,
+                                                                    "NEIF": "O"
+                                                                };
+                                                                societe.push(addsociete);
+
+                                                                connection.query('INSERT INTO ged_societe (societe_name, societe_CODEDI, societe_NEIF) VALUES (?, ?, ?)', [line.NOM_SOCIETE, row.CODEDI, "0"], function(err, result) {
+                                                                    if (err) {
+                                                                        console.error(err);
+                                                                    }
+                                                                    var s = _.find(societe, {
+                                                                        'CODEDI': row.CODEDI
+                                                                    });
+                                                                    soc = s.societe;
+                                                                    var filenameArray = filenameFormat.split("/");
+                                                                    console.log(filenameArray[1]);
+                                                                    var pos = {
+                                                                        "filename": filenameArray[1],
+                                                                        "codeb": row.NUMEQUINOXE,
+                                                                        "numdoc": lines[0].NUM_DOC,
+                                                                        "CODEDI": row.CODEDI,
+                                                                        "remettant": lines[0].PROPRIETE
+                                                                    };
+
+                                                                    dataPos.push(pos);
+                                                                });
+                                                            })
+
+                                                        });
+
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    },
+                                    function(err) {
+                                        if (err) {
+                                            console.info('A file failed to process');
+                                        } else {
+                                            console.info('All files have been processed successfully');
+                                            callback();
+
+                                            var dname = getDname();
+                                            archivage(dataPos, "dl/", dname, soc, archiveCallback)
+                                        }
+                                    });
+                            });
+                    },
+                    function(err) {
+                        if (err) {
+                            console.info('A file failed to process');
+                        } else {
+                            console.info('All society have been processed successfully');
+                        }
+                    });
+                connection.release();
+            });
+    });
+}, null, false, 'Europe/Paris');
 
 var archiveCallback = function(error, positions) {
     insertBDD(positions);
@@ -414,7 +404,6 @@ function archivage(results, path, dname, soc, callback) {
                             'soc': soc
                         });
 
-                        console.log(schtrait);
                         var zip = "";
                         if (schtrait != undefined) {
                             schtrait.zips.forEach(function(item) {
@@ -426,7 +415,7 @@ function archivage(results, path, dname, soc, callback) {
                         var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
                         connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "noBarcode", date], function(err, result) {
                             if (err) {
-                                console.log(err);
+                                console.error(err);
                             }
                             sock.sendErrorMsg(soc, "noBarcode");
                         });
@@ -462,7 +451,7 @@ function archivage(results, path, dname, soc, callback) {
                     if (!e || (e && e.code === 'EEXIST')) {
                         exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error, stdout, stderr) {
                             if (error) {
-                                console.log("error sur le convert en archive " + error);
+                                console.error(error);
                                 //throw err;
                             }
                             setTimeout(function() {
@@ -487,7 +476,7 @@ function archivage(results, path, dname, soc, callback) {
 
                     } else {
                         //debug
-                        console.log(e);
+                        console.error(e);
                     }
                 });
             }
@@ -505,7 +494,7 @@ function insertBDD(positions) {
             connection.query('INSERT INTO ged_doc (numequinoxe, numdoc, societe, CODEDI, datescan, remettant, doc) VALUES (?, ?, ?, ? ,? ,? ,?)', [item.numequinoxe, item.numdoc, item.societe, item.CODEDI, date, item.remettant, JSON.stringify(item.doc)], function(err, result) {
                 if (err) {
                     //norelease
-                    console.log(err);
+                    console.error(err);
                     item.doc.forEach(function(row) {
                         var pos = {
                             "filename": row.originFile,
@@ -517,7 +506,7 @@ function insertBDD(positions) {
                         sock.majTrait(pos);
                     });
                 } else {
-                    //console.log("insert " + item.numequinoxe);
+                    console.info("insertion de " + item.numequinoxe);
                     item.doc.forEach(function(row) {
                         var pos = {
                             "filename": row.originFile,
@@ -584,8 +573,7 @@ function traitRenvoie(ftp, item, soc, remettant) {
         function putFtp(nomenclatureFile) {
             c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
                 if (err) {
-                    console.log(err);
-                    throw err;
+                    console.error(err);
                 }
                 c.end();
             });

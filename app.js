@@ -130,7 +130,7 @@ exports.end_traitement = function(societe) {
     var supptrait = _.remove(traitementList, function(n) {
         return n.soc == societe;
     });
-    console.log("Fin traitement :" + societe);
+    console.info("Fin traitement :" + societe);
 }
 
 function deZip(path) {
