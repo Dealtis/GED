@@ -4,10 +4,11 @@ var _ = require('lodash');
 const fs = require('fs');
 var exec = require('child_process').exec,
     child;
+var scribe = require('scribe-js')();
 var conn = require('./conn');
 var CronJob = require('cron').CronJob;
 //clean temp
-
+var console = process.console;
 
 const nodemailer = require('nodemailer');
 
@@ -23,7 +24,7 @@ var smtpConfig = {
 
 //cleaning temp
 new CronJob('0 */120 * * * *', function() {
-  console.log("Clean /temp");
+    console.log("Clean /temp");
     fs.readdir('temp/', function(err, data) {
         if (err) {
             console.log("readir" + err);
@@ -72,6 +73,8 @@ app.use(express.static('release'));
 console.log("(▀¯▀) GED POLE START (▀¯▀)");
 
 var server = app.listen(3030, function() {});
+
+app.use('/logs', scribe.webPanel());
 
 //getfile
 app.get('/ged/:numequinoxe', function(req, res) {

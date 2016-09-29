@@ -2,6 +2,7 @@ var async = require('async');
 var _ = require('lodash');
 var Client = require('ftp');
 const fs = require('fs');
+var CronJob = require('cron').CronJob;
 var exec = require('child_process').exec,
     child;
 
@@ -12,7 +13,7 @@ var sock = require('./server');
 var endtrait = require('./app');
 //societe
 var societe = [];
-
+var console = process.console;
 conn.pool.getConnection(function(err, connection) {
     // connected! (unless `err` is set)
     connection.query('select * from ged_societe',
@@ -50,47 +51,47 @@ exports.trait = function(liste, soc, path) {
                 if (err) throw err;
                 //lecture du code#
                 var barcodeCallback = function(error, stdout, stderr) {
-                        //if error retry
-                        if (error) {
-                            setTimeout(function() {
-                                debugger;
-                                exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
-                            }, 1000);
-                            //console.log(error);
-                            //callback(null);
-                        } else {
-                            var trimstdout = _.trim(stdout);
-                            //console.log(trimstdout);
-                            if (trimstdout.indexOf("POLE") > -1) {
-                                var codeb = _.replace(trimstdout, 'POLE', '');
-                                pos.statut = 60;
-                                pos.codeb = codeb;
-                                sock.majTrait(pos);
-                                if (pos.jpgfile != undefined) {
-                                    setTimeout(function() {
-                                        fs.unlink(pos.jpgfile, (err) => {
-                                            if (err) {
-                                                debugger;
-                                                console.log("err jPp = " + err);
-                                                throw err;
-                                            }
-                                        });
-                                    }, 1000);
+                    //if error retry
+                    if (error) {
+                        setTimeout(function() {
+                            debugger;
+                            exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
+                        }, 1000);
+                        //console.log(error);
+                        //callback(null);
+                    } else {
+                        var trimstdout = _.trim(stdout);
+                        //console.log(trimstdout);
+                        if (trimstdout.indexOf("POLE") > -1) {
+                            var codeb = _.replace(trimstdout, 'POLE', '');
+                            pos.statut = 60;
+                            pos.codeb = codeb;
+                            sock.majTrait(pos);
+                            if (pos.jpgfile != undefined) {
+                                setTimeout(function() {
+                                    fs.unlink(pos.jpgfile, (err) => {
+                                        if (err) {
+                                            debugger;
+                                            console.log("err jPp = " + err);
+                                            throw err;
+                                        }
+                                    });
+                                }, 1000);
+                            }
+                            conn.pool.getConnection(function(err, connection) {
+                                // connected! (unless `err` is set)
+                                if (err) {
+                                    console.log(err);
                                 }
-                                conn.pool.getConnection(function(err, connection) {
-                                    // connected! (unless `err` is set)
-                                    if (err) {
-                                        console.log(err);
-                                    }
-                                    if (!(codeb == "noBarcodes")) {
-                                        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
-                                            if (err) {
-                                                pos.statut = "danger";
-                                                sock.majTrait(pos);
-                                                // TODO
-                                                //send mail pour informer que les infos sont inconnu
+                                if (!(codeb == "noBarcodes")) {
+                                    connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
+                                        if (err) {
+                                            pos.statut = "danger";
+                                            sock.majTrait(pos);
+                                            // TODO
+                                            //send mail pour informer que les infos sont inconnu
 
-                                            }else
+                                        } else {
                                             pos.numdoc = lines[0].NUM_DOC;
                                             pos.CODEDI = s.CODEDI;
                                             pos.remettant = lines[0].PROPRIETE;
@@ -98,34 +99,35 @@ exports.trait = function(liste, soc, path) {
                                             sock.majTrait(pos);
                                             callback(null, pos);
                                             connection.release();
-                                        });
-                                    } else {
-                                        pos.statut = 80;
-                                        sock.majTrait(pos);
-                                        callback(null, pos);
-                                        connection.release();
-                                    }
-                                });
-                            } else {
-                                if (pos.jpgfile != undefined) {
-                                    setTimeout(function() {
-                                        fs.unlink(pos.jpgfile, (err) => {
-                                            if (err) {
-                                                debugger;
-                                                console.log("err jPp = " + err);
-                                                throw err;
-                                            }
-                                        });
-                                    }, 1000);
+                                        }
+                                    });
+                                } else {
+                                    pos.statut = 80;
+                                    sock.majTrait(pos);
+                                    callback(null, pos);
+                                    connection.release();
                                 }
-                                pos.statut = 80;
-                                pos.codeb = "noBarcodes";
-                                sock.majTrait(pos);
-                                callback(null, pos);
+                            });
+                        } else {
+                            if (pos.jpgfile != undefined) {
+                                setTimeout(function() {
+                                    fs.unlink(pos.jpgfile, (err) => {
+                                        if (err) {
+                                            debugger;
+                                            console.log("err jPp = " + err);
+                                            throw err;
+                                        }
+                                    });
+                                }, 1000);
                             }
+                            pos.statut = 80;
+                            pos.codeb = "noBarcodes";
+                            sock.majTrait(pos);
+                            callback(null, pos);
                         }
                     }
-                    //lecture du codeb ou pas celon la societe
+                };
+                //lecture du codeb ou pas celon la societe
                 if (s.NEIF == 0) {
                     exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
                 } else {
@@ -135,7 +137,7 @@ exports.trait = function(liste, soc, path) {
                     pos.statut = 60;
                     pos.codeb = codeb;
                     sock.majTrait(pos);
-                    
+
                     conn.pool.getConnection(function(err, connection) {
                         // connected! (unless `err` is set)
                         if (err) {
@@ -213,133 +215,288 @@ exports.trait = function(liste, soc, path) {
 
 
     async.parallel(asyncTasks, function(err, results) {
-        var positions = [];
-        var asyncTasksEqui = [];
-        var lastcodeb;
+        var dname = getDname();
 
+        archivage(results, path, dname, soc, archiveCallback);
 
-        var now = new Date();
-        var month = new Array();
-        month[0] = "Janvier";
-        month[1] = "Fevrier";
-        month[2] = "Mars";
-        month[3] = "Avril";
-        month[4] = "Mai";
-        month[5] = "Juin";
-        month[6] = "Juillet";
-        month[7] = "Aout";
-        month[8] = "Septembre";
-        month[9] = "Octobre";
-        month[10] = "Novembre";
-        month[11] = "Decembre";
-
-        var dname = ("0" + now.getDate()).slice(-2) + "_" + month[now.getMonth()] + "_" + now.getFullYear();
-
-        results.forEach(function(pos) {
-            var filename = pos.filename.substring(0, pos.filename.length - 4);
-            var extension = pos.filename.slice(-3);
-
-            if (pos.codeb == "noBarcodes" || pos.codeb == lastcodeb) {
-                //get positions with numequinox == lastcodeb
-                var spos = _.find(positions, {
-                    'numequinoxe': lastcodeb
-                });
-                if (spos != undefined) {
-                    var addpos = {
-                        "filename": filename + ".pdf",
-                        "originFile": pos.filename,
-                        "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
-                    };
-                    spos.doc.push(addpos);
-                } else {
-                    fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
-                        conn.pool.getConnection(function(err, connection) {
-
-                            var schtrait = _.find(traitementList, {
-                                'soc': soc
-                            });
-
-                            console.log(schtrait);
-                            var zip = "";
-                            if (schtrait != undefined) {
-                                schtrait.zips.forEach(function(item) {
-                                    zip = zip + ", " + item.zipname
-                                });
-                            } else {
-                                zip = "undefined";
-                            }
-                            var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                            connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "noBarcode", date], function(err, result) {
-                                if (err) {
-                                    console.log(err);
-                                }
-                                sock.sendErrorMsg(soc, "noBarcode");
-                            });
-                            connection.release();
-                        });
-                    })
-                }
-
-                //TODO
-                //creation du fichier LDS
-            } else {
-                //get info equinox
-                lastcodeb = pos.codeb;
-                var addpos = {
-                    "numequinoxe": pos.codeb,
-                    "numdoc": pos.numdoc,
-                    "societe": pos.societe,
-                    "CODEDI": pos.CODEDI,
-                    "datescan": pos.datetrait,
-                    "remettant": pos.remettant,
-                    "doc": [{
-                        "filename": filename + ".pdf",
-                        "originFile": pos.filename,
-                        "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
-                    }]
-                };
-                positions.push(addpos);
-                //creation du fichier LDS
-            }
-            fs.mkdir("archive/" + soc + "/" + dname, function(e) {
-                if (!e || (e && e.code === 'EEXIST')) {
-                    exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error, stdout, stderr) {
-                        if (error) {
-                            console.log("error sur le onvert en archive " + err);
-                            //throw err;
-                        }
-                        setTimeout(function() {
-                            fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err, stdout, stderr) {
-                                if (err) {
-                                    //pos.statut = "danger";
-                                    //sock.majTrait(pos);
-                                    //norelease
-                                    //console.log(err);
-                                    //throw err;
-                                }
-                                fs.stat(path + pos.filename, function(err, stats) {
-                                    if (stats != undefined) {
-                                        fs.unlink(path + pos.filename, function(err, stdout, stderr) {
-
-                                        })
-                                    }
-                                });
-                            })
-                        }, 2000);
-                    });
-
-                } else {
-                    //debug
-                    console.log(e);
-                }
-            });
-            pos.statut = 90;
-            sock.majTrait(pos);
-        });
         endtrait.end_traitement(soc);
-        insertBDD(positions);
     });
 }; //trait end
+
+//new CronJob('0 */1 * * * *', function() {
+console.log("DL START");
+conn.pool.getConnection(function(err, connection) {
+    // connected! (unless `err` is set)
+
+    connection.query('select CODEDI from ged_import where NOTOK = 0 GROUP BY CODEDI',
+        function(err, rowsoc, fields) {
+            if (err) {
+                console.log(err.code);
+                throw err;
+            }
+
+            async.eachSeries(rowsoc, function(soc, callback) {
+                    console.log(soc.CODEDI);
+                    var soc;
+                    connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + soc.CODEDI + "' LIMIT 10",
+                        function(err, rows, fields) {
+                            if (err) {
+                                console.log(err.code);
+                                throw err;
+                            }
+                            var dataPos = [];
+                            async.eachSeries(rows, function(row, callback) {
+                                    var download = function(uri, filename, callback) {
+                                        request.head(uri, function(err, res, body) {
+                                            try {
+                                                switch (res.headers['content-type']) {
+                                                    case "image/jpeg":
+                                                        filenameFormat = filename + ".jpg";
+                                                        break;
+                                                    case "image/tiff":
+                                                        filenameFormat = filename + ".tif";
+                                                        break;
+                                                    case "image/gif":
+                                                        filenameFormat = filename + ".gif";
+                                                        break;
+                                                    case "image/png":
+                                                        filenameFormat = filename + ".png";
+                                                        break;
+                                                    case "application/pdf":
+                                                        filenameFormat = filename + ".pdf";
+                                                        break;
+                                                    default:
+                                                }
+
+                                                //TODO handle error
+                                                request(uri).pipe(
+                                                    fs.createWriteStream(filenameFormat).on('error', function(err) {
+                                                        console.log("ERROR:" + err);
+                                                        //TODO if error send error
+                                                        //sock.sendErrorMsg();
+
+                                                    })).on('close', callback(null, filenameFormat));
+
+                                            } catch (e) {
+                                                //console.log(e);
+                                            }
+                                        });
+                                    };
+
+                                    //NUMEQUINOXE, URL_EQUINOXE, CODEDI, NOTOK
+                                    download(row.URL_EQUINOXE, 'dl/' + row.NUMEQUINOXE + '_' + row.CODEDI + '_' + Date.now(), function(err, filenameFormat) {
+
+                                        callback();
+
+                                        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + row.NUMEQUINOXE + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
+                                            if (err) {
+                                                //norelease
+                                                throw err;
+                                            }
+                                            if (lines == 0) {
+                                                console.log("erreur sur les infos");
+                                            } else {
+                                                var s = _.find(societe, {
+                                                    'CODEDI': row.CODEDI
+                                                });
+
+                                                if (s != undefined) {
+                                                    soc = s.societe;
+                                                    var filenameArray = filenameFormat.split("/");
+                                                    console.log(filenameArray[1]);
+                                                    var pos = {
+                                                        "filename": filenameArray[1],
+                                                        "codeb": row.NUMEQUINOXE,
+                                                        "numdoc": lines[0].NUM_DOC,
+                                                        "CODEDI": row.CODEDI,
+                                                        "remettant": lines[0].PROPRIETE
+                                                    };
+
+                                                    dataPos.push(pos);
+                                                } else {
+                                                    connection.query('SELECT NOM_SOCIETE FROM societe WHERE COD_EDI = ?', [row.CODEDI], function(err, rows, fields) {
+                                                        if (err) {
+                                                            console.log(err);
+                                                            throw err;
+                                                        }
+                                                        rows.forEach(function(line) {
+                                                            var addsociete = {
+                                                                "societe": line.NOM_SOCIETE,
+                                                                "CODEDI": row.CODEDI,
+                                                                "NEIF": "O"
+                                                            };
+                                                            societe.push(addsociete);
+
+                                                            connection.query('INSERT INTO ged_societe (societe_name, societe_CODEDI, societe_NEIF) VALUES (?, ?, ?)', [line.NOM_SOCIETE, row.CODEDI, "0"], function(err, result) {
+                                                                if (err) {
+                                                                    console.log(err);
+                                                                }
+                                                                var s = _.find(societe, {
+                                                                    'CODEDI': row.CODEDI
+                                                                });
+                                                                soc = s.societe;
+                                                                var filenameArray = filenameFormat.split("/");
+                                                                console.log(filenameArray[1]);
+                                                                var pos = {
+                                                                    "filename": filenameArray[1],
+                                                                    "codeb": row.NUMEQUINOXE,
+                                                                    "numdoc": lines[0].NUM_DOC,
+                                                                    "CODEDI": row.CODEDI,
+                                                                    "remettant": lines[0].PROPRIETE
+                                                                };
+
+                                                                dataPos.push(pos);
+                                                            });
+                                                        })
+
+                                                    });
+
+                                                }
+                                            }
+                                        });
+                                    });
+                                },
+                                function(err) {
+                                    if (err) {
+                                        console.log('A file failed to process');
+                                    } else {
+                                        console.log('All files have been processed successfully');
+                                        callback();
+
+                                        var dname = getDname();
+                                        archivage(dataPos, "dl/", dname, soc, archiveCallback)
+                                    }
+                                });
+                        });
+                },
+                function(err) {
+                    if (err) {
+                        console.log('A file failed to process');
+                    } else {
+                        console.log('All society have been processed successfully');
+                    }
+                });
+            connection.release();
+        });
+});
+//}, null, false, 'Europe/Paris');
+
+var archiveCallback = function(error, positions) {
+    insertBDD(positions);
+};
+
+function archivage(results, path, dname, soc, callback) {
+    var positions = [];
+    var asyncTasksEqui = [];
+    var lastcodeb;
+
+    results.forEach(function(pos) {
+        var filename = pos.filename.substring(0, pos.filename.length - 4);
+        var extension = pos.filename.slice(-3);
+
+        if (pos.codeb == "noBarcodes" || pos.codeb == lastcodeb) {
+            //get positions with numequinox == lastcodeb
+            var spos = _.find(positions, {
+                'numequinoxe': lastcodeb
+            });
+            if (spos != undefined) {
+                var addpos = {
+                    "filename": filename + ".pdf",
+                    "originFile": pos.filename,
+                    "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
+                };
+                spos.doc.push(addpos);
+            } else {
+                fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
+                    conn.pool.getConnection(function(err, connection) {
+
+                        var schtrait = _.find(traitementList, {
+                            'soc': soc
+                        });
+
+                        console.log(schtrait);
+                        var zip = "";
+                        if (schtrait != undefined) {
+                            schtrait.zips.forEach(function(item) {
+                                zip = zip + ", " + item.zipname
+                            });
+                        } else {
+                            zip = "undefined";
+                        }
+                        var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                        connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "noBarcode", date], function(err, result) {
+                            if (err) {
+                                console.log(err);
+                            }
+                            sock.sendErrorMsg(soc, "noBarcode");
+                        });
+                        connection.release();
+                    });
+                })
+            }
+
+            //TODO
+            //creation du fichier LDS
+        } else {
+            //get info equinox
+            lastcodeb = pos.codeb;
+            var addpos = {
+                "numequinoxe": pos.codeb,
+                "numdoc": pos.numdoc,
+                "societe": pos.societe,
+                "CODEDI": pos.CODEDI,
+                "datescan": pos.datetrait,
+                "remettant": pos.remettant,
+                "doc": [{
+                    "filename": filename + ".pdf",
+                    "originFile": pos.filename,
+                    "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
+                }]
+            };
+            positions.push(addpos);
+            //creation du fichier LDS
+        }
+        fs.mkdir("archive/" + soc, function(e) {
+            if (!e || (e && e.code === 'EEXIST')) {
+                fs.mkdir("archive/" + soc + "/" + dname, function(e) {
+                    if (!e || (e && e.code === 'EEXIST')) {
+                        exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error, stdout, stderr) {
+                            if (error) {
+                                console.log("error sur le convert en archive " + error);
+                                //throw err;
+                            }
+                            setTimeout(function() {
+                                fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err, stdout, stderr) {
+                                    if (err) {
+                                        //pos.statut = "danger";
+                                        //sock.majTrait(pos);
+                                        //norelease
+                                        //console.log(err);
+                                        //throw err;
+                                    }
+                                    fs.stat(path + pos.filename, function(err, stats) {
+                                        if (stats != undefined) {
+                                            fs.unlink(path + pos.filename, function(err, stdout, stderr) {
+
+                                            })
+                                        }
+                                    });
+                                })
+                            }, 2000);
+                        });
+
+                    } else {
+                        //debug
+                        console.log(e);
+                    }
+                });
+            }
+        });
+        pos.statut = 90;
+        sock.majTrait(pos);
+    });
+    callback(null, positions);
+};
 
 function insertBDD(positions) {
     var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -425,28 +582,28 @@ function traitRenvoie(ftp, item, soc, remettant) {
         });
 
         function putFtp(nomenclatureFile) {
-          c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
-              if (err) {
-                  console.log(err);
-                  throw err;
-              }
-              c.end();
-          });
+            c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
+                if (err) {
+                    console.log(err);
+                    throw err;
+                }
+                c.end();
+            });
 
-          if (remettant) {
-              //if item.remettant  want return, find ftp config and send
-              var r = _.find(societe, {
-                  'societe': item.remettant
-              });
+            if (remettant) {
+                //if item.remettant  want return, find ftp config and send
+                var r = _.find(societe, {
+                    'societe': item.remettant
+                });
 
-              if (r != undefined) {
-                  var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
-                  var ftpR = JSON.parse(ftpRJSON);
-                  if (ftpR.renvoieremettant) {
-                      traitRenvoie(ftp, item, item.remettant, false);
-                  }
-              }
-          }
+                if (r != undefined) {
+                    var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
+                    var ftpR = JSON.parse(ftpRJSON);
+                    if (ftpR.renvoieremettant) {
+                        traitRenvoie(ftp, item, item.remettant, false);
+                    }
+                }
+            }
         }
 
         c.connect({
@@ -474,6 +631,25 @@ function traitRenvoie(ftp, item, soc, remettant) {
             }
         }
     }
+}
+
+function getDname() {
+    var now = new Date();
+    var month = new Array();
+    month[0] = "Janvier";
+    month[1] = "Fevrier";
+    month[2] = "Mars";
+    month[3] = "Avril";
+    month[4] = "Mai";
+    month[5] = "Juin";
+    month[6] = "Juillet";
+    month[7] = "Aout";
+    month[8] = "Septembre";
+    month[9] = "Octobre";
+    month[10] = "Novembre";
+    month[11] = "Decembre";
+
+    return ("0" + now.getDate()).slice(-2) + "_" + month[now.getMonth()] + "_" + now.getFullYear();
 }
 
 function getNomenclatureFile(nomenclature, pos, index) {
