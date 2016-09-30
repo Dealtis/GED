@@ -643,7 +643,7 @@ function getInfo(numequinoxe, soc, path, filename, extension) {
             throw err;
         }
 
-        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + numequinoxe + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
+        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + numequinoxe + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines) {
             if (err) {
                 console.error(err);
             }
