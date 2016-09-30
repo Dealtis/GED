@@ -27,6 +27,8 @@ var watcher = chokidar.watch('reception', {
 
 //array traitement
 var traitementList = [];
+// export it
+exports.traitementList = traitementList;
 
 try {
     watcher.on('add', (path) => {
@@ -155,12 +157,27 @@ function deZip(path) {
                 });
                 unzipper.on('extract', function(log) {
                     console.log('Finished extracting');
-                    fs.rename(path, "archive/" + pathSplit[1] + "/zip/" + filename, function(err, stdout, stderr) {
-                        if (err) {
-                            throw err;
+                    fs.mkdir("archive/" + pathSplit[1], function(e) {
+                        if (!e || (e && e.code === 'EEXIST')) {
+                            fs.mkdir("archive/" + pathSplit[1] + "/zip", function(e) {
+                                if (!e || (e && e.code === 'EEXIST')) {
+                                    fs.rename(path, "archive/" + pathSplit[1] + "/zip/" + filename, function(err, stdout, stderr) {
+                                        if (err) {
+                                            throw err;
+                                        }
+                                        console.log("Archive success");
+                                    })
+                                } else {
+                                    //debug
+                                    console.error(e);
+                                }
+                            });
+                        } else {
+                            //debug
+                            console.error(e);
                         }
-                        console.log("Archive success");
-                    })
+                    });
+
                 });
                 unzipper.on('progress', function(fileIndex, fileCount) {
                     console.log('Extracted file ' + (fileIndex + 1) + ' of ' + fileCount);
@@ -189,7 +206,7 @@ function splitPdf(path) {
     exec('pdftk ' + path + ' burst output ' + pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '_%02d_tr.' + extension,
         function(error, stdout, stderr) {
             if (error != null) {
-                console.log("err was throw" + error);
+                console.error(error);
                 var pos = {
                     "filename": filename + '.' + extension,
                     "societe": pathSplit[1],

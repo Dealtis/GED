@@ -162,7 +162,9 @@ exports.trait = function(liste, soc, path) {
                 if (s.NEIF == 0) {
                     if (type == "pdf") {
                         try {
-                            exec('convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg', function(error, stdout, stderr) {
+                        //  'convert -verbose -density 150 -trim' + path + filename + "." + extension + '-quality 100 -flatten -sharpen 0x1.0' + path + filename + '.jpg'
+                        //  'convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg'
+                            exec('convert -verbose -density 150 -trim ' + path + filename + "." + extension + ' -quality 100 -flatten -sharpen 0x1.0 ' + path + filename + '.jpg', function(error, stdout, stderr) {
                                 if (error) {
                                     console.error(error);
                                 }
@@ -400,7 +402,7 @@ function archivage(results, path, dname, soc, callback) {
                 fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
                     conn.pool.getConnection(function(err, connection) {
 
-                        var schtrait = _.find(traitementList, {
+                        var schtrait = _.find(endtrait.traitementList, {
                             'soc': soc
                         });
 
@@ -412,14 +414,16 @@ function archivage(results, path, dname, soc, callback) {
                         } else {
                             zip = "undefined";
                         }
+
                         var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                        connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "noBarcode", date], function(err, result) {
+                        connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, soc, "noBarcode", date], function(err, result) {
                             if (err) {
                                 console.error(err);
                             }
                             sock.sendErrorMsg(soc, "noBarcode");
                         });
                         connection.release();
+
                     });
                 })
             }
@@ -463,6 +467,7 @@ function archivage(results, path, dname, soc, callback) {
                                         //console.log(err);
                                         //throw err;
                                     }
+
                                     fs.stat(path + pos.filename, function(err, stats) {
                                         if (stats != undefined) {
                                             fs.unlink(path + pos.filename, function(err, stdout, stderr) {
