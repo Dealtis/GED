@@ -82,26 +82,7 @@ exports.trait = function(liste, soc, path) {
                                     console.error(err);
                                 }
                                 if (!(codeb == "noBarcodes")) {
-                                    connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
-                                        if (err) {
-                                            console.error(err);
-                                        }
-
-                                        if (lines != 0) {
-                                            pos.numdoc = lines[0].NUM_DOC;
-                                            pos.CODEDI = s.CODEDI;
-                                            pos.remettant = lines[0].PROPRIETE;
-                                            pos.statut = 80;
-                                            sock.majTrait(pos);
-                                            callback(null, pos);
-
-                                        } else {
-                                            console.error("Informations introuvable pour " + pos.codeb + " de " + soc);
-                                            setError(path, filename, extension, soc, "noInformation");
-                                        }
-                                        connection.release();
-
-                                    });
+                                    getInfo(codeb, soc, path, filename, extension);
                                 } else {
                                     pos.statut = 80;
                                     sock.majTrait(pos);
@@ -136,31 +117,7 @@ exports.trait = function(liste, soc, path) {
                     pos.statut = 60;
                     pos.codeb = codeb;
                     sock.majTrait(pos);
-
-                    conn.pool.getConnection(function(err, connection) {
-                        // connected! (unless `err` is set)
-                        if (err) {
-                            throw err;
-                        }
-                        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
-                            if (err) {
-                                console.error(err);
-                            }
-                            if (lines != 0) {
-                                pos.numdoc = lines[0].NUM_DOC;
-                                pos.CODEDI = s.CODEDI;
-                                pos.remettant = lines[0].PROPRIETE;
-                                pos.statut = 80;
-                                sock.majTrait(pos);
-                                callback(null, pos);
-                            } else {
-                                console.error("Informations introuvable pour " + pos.codeb + " de " + soc);
-                                setError(path, filename, extension, soc, "noInformation");
-                            }
-
-                            connection.release();
-                        });
-                    });
+                    getInfo(codeb, soc, path, filename, extension);
                 }
             };
 
@@ -677,6 +634,34 @@ function setError(path, filename, extension, soc, errCode) {
 
         });
     })
+}
+
+function getInfo(numequinoxe, soc, path, filename, extension) {
+    conn.pool.getConnection(function(err, connection) {
+        // connected! (unless `err` is set)
+        if (err) {
+            throw err;
+        }
+
+        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + numequinoxe + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
+            if (err) {
+                console.error(err);
+            }
+            if (lines != 0) {
+                pos.numdoc = lines[0].NUM_DOC;
+                pos.CODEDI = s.CODEDI;
+                pos.remettant = lines[0].PROPRIETE;
+                pos.statut = 80;
+                sock.majTrait(pos);
+                callback(null, pos);
+            } else {
+                console.error("Informations introuvable pour " + numequinoxe + " de " + soc);
+                setError(path, filename, extension, soc, "noInformation");
+            }
+
+            connection.release();
+        });
+    });
 }
 //traitement de creation de societe
 
