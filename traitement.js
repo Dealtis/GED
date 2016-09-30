@@ -84,20 +84,23 @@ exports.trait = function(liste, soc, path) {
                                 if (!(codeb == "noBarcodes")) {
                                     connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
                                         if (err) {
-                                            pos.statut = "danger";
-                                            sock.majTrait(pos);
-                                            // TODO
-                                            //send mail pour informer que les infos sont inconnu
+                                            console.error(err);
+                                        }
 
-                                        } else {
+                                        if (lines != 0) {
                                             pos.numdoc = lines[0].NUM_DOC;
                                             pos.CODEDI = s.CODEDI;
                                             pos.remettant = lines[0].PROPRIETE;
                                             pos.statut = 80;
                                             sock.majTrait(pos);
                                             callback(null, pos);
-                                            connection.release();
+
+                                        } else {
+                                            console.error("Informations introuvable pour " + pos.codeb + " de " + soc);
+                                            setError(path, filename, extension, soc, "noInformation");
                                         }
+                                        connection.release();
+
                                     });
                                 } else {
                                     pos.statut = 80;
@@ -141,17 +144,20 @@ exports.trait = function(liste, soc, path) {
                         }
                         connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + pos.codeb + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
                             if (err) {
-                                pos.statut = "danger";
-                                sock.majTrait(pos);
-                                //norelease
-                                throw err;
+                                console.error(err);
                             }
-                            pos.numdoc = lines[0].NUM_DOC;
-                            pos.CODEDI = s.CODEDI;
-                            pos.remettant = lines[0].PROPRIETE;
-                            pos.statut = 80;
-                            sock.majTrait(pos);
-                            callback(null, pos);
+                            if (lines != 0) {
+                                pos.numdoc = lines[0].NUM_DOC;
+                                pos.CODEDI = s.CODEDI;
+                                pos.remettant = lines[0].PROPRIETE;
+                                pos.statut = 80;
+                                sock.majTrait(pos);
+                                callback(null, pos);
+                            } else {
+                                console.error("Informations introuvable pour " + pos.codeb + " de " + soc);
+                                setError(path, filename, extension, soc, "noInformation");
+                            }
+
                             connection.release();
                         });
                     });
@@ -162,8 +168,8 @@ exports.trait = function(liste, soc, path) {
                 if (s.NEIF == 0) {
                     if (type == "pdf") {
                         try {
-                        //  'convert -verbose -density 150 -trim' + path + filename + "." + extension + '-quality 100 -flatten -sharpen 0x1.0' + path + filename + '.jpg'
-                        //  'convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg'
+                            //  'convert -verbose -density 150 -trim' + path + filename + "." + extension + '-quality 100 -flatten -sharpen 0x1.0' + path + filename + '.jpg'
+                            //  'convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg'
                             exec('convert -verbose -density 150 -trim ' + path + filename + "." + extension + ' -quality 100 -flatten -sharpen 0x1.0 ' + path + filename + '.jpg', function(error, stdout, stderr) {
                                 if (error) {
                                     console.error(error);
@@ -285,18 +291,24 @@ new CronJob('0 */1 * * * *', function() {
                                             connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + row.NUMEQUINOXE + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
                                                 if (err) {
                                                     //norelease
-                                                    throw err;
+                                                    //throw err;
                                                 }
-                                                if (lines == 0) {
-                                                    console.warning("Informations introuvable pour "+ row.NUMEQUINOXE +" de "+row.CODEDI);
-                                                } else {
-                                                    var s = _.find(societe, {
-                                                        'CODEDI': row.CODEDI
-                                                    });
+                                                var s = _.find(societe, {
+                                                    'CODEDI': row.CODEDI
+                                                });
 
+                                                var filenameArray = filenameFormat.split("/");
+                                                var fn = filenameArray[1].split(".");
+
+                                                if (lines == 0) {
+                                                    if (s != undefined) {
+                                                        console.warning("Informations introuvable pour " + row.NUMEQUINOXE + " de " + row.CODEDI);
+                                                        setError('dl/' + row.NUMEQUINOXE, fn[0], fn[1], s.societe, "noInformation");
+                                                    }
+                                                } else {
                                                     if (s != undefined) {
                                                         soc = s.societe;
-                                                        var filenameArray = filenameFormat.split("/");
+
                                                         var pos = {
                                                             "filename": filenameArray[1],
                                                             "codeb": row.NUMEQUINOXE,
@@ -399,35 +411,8 @@ function archivage(results, path, dname, soc, callback) {
                 };
                 spos.doc.push(addpos);
             } else {
-                fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
-                    conn.pool.getConnection(function(err, connection) {
-
-                        var schtrait = _.find(endtrait.traitementList, {
-                            'soc': soc
-                        });
-
-                        var zip = "";
-                        if (schtrait != undefined) {
-                            schtrait.zips.forEach(function(item) {
-                                zip = zip + ", " + item.zipname
-                            });
-                        } else {
-                            zip = "undefined";
-                        }
-
-                        var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                        connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, soc, "noBarcode", date], function(err, result) {
-                            if (err) {
-                                console.error(err);
-                            }
-                            sock.sendErrorMsg(soc, "noBarcode");
-                        });
-                        connection.release();
-
-                    });
-                })
+                setError(path, filename, extension, soc, "noBarcode");
             }
-
             //TODO
             //creation du fichier LDS
         } else {
@@ -664,6 +649,35 @@ function getNomenclatureFile(nomenclature, pos, index) {
     }
 }
 
+function setError(path, filename, extension, soc, errCode) {
+    fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
+        conn.pool.getConnection(function(err, connection) {
+
+            var schtrait = _.find(endtrait.traitementList, {
+                'soc': soc
+            });
+
+            var zip = "";
+            if (schtrait != undefined) {
+                schtrait.zips.forEach(function(item) {
+                    zip = zip + ", " + item.zipname
+                });
+            } else {
+                zip = "undefined";
+            }
+
+            var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, soc, "noBarcode", date], function(err, result) {
+                if (err) {
+                    console.error(err);
+                }
+                sock.sendErrorMsg(soc, errCode);
+            });
+            connection.release();
+
+        });
+    })
+}
 //traitement de creation de societe
 
 exports.creationSociete = function(soc, CODEDI, NEIF) {
