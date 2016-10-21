@@ -212,12 +212,6 @@ fs.readFile('mail/error.html', function(err, html) {
     };
 });
 
-
-
-
-
-
-
 exports.majTrait = function(pos) {
     var schfile = _.find(traitPos, {
         'filename': pos.filename

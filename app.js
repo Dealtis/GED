@@ -4,11 +4,8 @@ const fs = require('fs');
 var conn = require('./conn');
 var sock = require('./server');
 var _ = require('lodash');
-var exec = require('child_process').exec,
-    child;
+var exec = require('child_process').exec;
 var traitement = require('./traitement');
-var request = require('request');
-var CronJob = require('cron').CronJob;
 var console = process.console;
 
 
@@ -51,7 +48,7 @@ try {
                 var pathSplit = path.split('\\');
                 setTimeout(function() {
                     function full_tr_func(pathSplit) {
-                        fs.readdir(pathSplit[0] + '/' + pathSplit[1] + '/', function(err, data) {
+                        fs.readdir(pathSplit[0] + '/' + pathSplit[1] + '/', function(err) {
                             if (err) {
                                 console.log("readir" + err);
                             }
@@ -97,15 +94,12 @@ function scan_tr(pathSplit) {
             console.log("readir" + err);
         }
         var full_tr = true;
-        var filename;
-        var extension;
         var soc = pathSplit[1];
         var BreakException = {};
 
         try {
             data.forEach(function(entry) {
-                filename = entry.substring(0, entry.length - 4);
-                extension = entry.slice(-3);
+                var extension = entry.slice(-3);
                 if (!(_.endsWith(entry, '_err.' + extension))) {
                     if (!(_.endsWith(entry, '_tr.' + extension))) {
                         full_tr = false;
@@ -129,7 +123,7 @@ function scan_tr(pathSplit) {
 }
 
 exports.end_traitement = function(societe) {
-    var supptrait = _.remove(traitementList, function(n) {
+     _.remove(traitementList, function(n) {
         return n.soc == societe;
     });
     console.info("Fin traitement :" + societe);
@@ -139,7 +133,7 @@ function deZip(path) {
     try {
         var pathSplit = path.split('\\');
         var filename = pathSplit[2];
-        fs.readFile(path, (err, data) => {
+        fs.readFile(path, (err) => {
             if (err) {
                 if (err == "EBUSY") {
                     setTimeout(function() {
@@ -153,15 +147,14 @@ function deZip(path) {
                 unzipper.on('error', function(err) {
                     console.log('Caught an error');
                     console.log(err);
-                    debugger;
                 });
-                unzipper.on('extract', function(log) {
+                unzipper.on('extract', function() {
                     console.log('Finished extracting');
                     fs.mkdir("archive/" + pathSplit[1], function(e) {
                         if (!e || (e && e.code === 'EEXIST')) {
                             fs.mkdir("archive/" + pathSplit[1] + "/zip", function(e) {
                                 if (!e || (e && e.code === 'EEXIST')) {
-                                    fs.rename(path, "archive/" + pathSplit[1] + "/zip/" + filename, function(err, stdout, stderr) {
+                                    fs.rename(path, "archive/" + pathSplit[1] + "/zip/" + filename, function(err) {
                                         if (err) {
                                             throw err;
                                         }
@@ -197,14 +190,14 @@ function deZip(path) {
             }, 3000);
         }
     }
-};
+}
 
 function splitPdf(path) {
     var pathSplit = path.split('\\');
     var filename = pathSplit[2].substring(0, pathSplit[2].length - 4);
     var extension = pathSplit[2].slice(-3);
     exec('pdftk ' + path + ' burst output ' + pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '_%02d_tr.' + extension,
-        function(error, stdout, stderr) {
+        function(error) {
             if (error != null) {
                 console.error(error);
                 var pos = {
@@ -237,7 +230,7 @@ function splitPdf(path) {
                         zip = "undefined";
                     }
                     var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                    connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "pdftk", date], function(err, result) {
+                    connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "pdftk", date], function(err) {
                         if (err) {
                             console.log(err);
                         }
@@ -248,9 +241,7 @@ function splitPdf(path) {
             } else {
                 setTimeout(function() {
                     fs.unlink(path, (err) => {
-
                         if (err) {
-                            debugger;
                             throw err;
                         }
                     });
@@ -277,7 +268,7 @@ function splitJpg(path) {
         var filename = pathSplit[2].substring(0, pathSplit[2].length - 4);
         var extension = pathSplit[2].slice(-3);
         if (path.indexOf("tif")) {
-            exec('convert ' + pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '.' + extension + ' -quality 100 ' + pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '_tr.jpg', function(error, stdout, stderr) {
+            exec('convert ' + pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '.' + extension + ' -quality 100 ' + pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '_tr.jpg', function(error) {
                 if (error) throw error;
                 fs.unlink(path, (err) => {
                     if (err) throw err;

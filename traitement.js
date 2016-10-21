@@ -3,8 +3,7 @@ var _ = require('lodash');
 var Client = require('ftp');
 const fs = require('fs');
 var CronJob = require('cron').CronJob;
-var exec = require('child_process').exec,
-    child;
+var exec = require('child_process').exec;
 
 var request = require('request');
 
@@ -17,7 +16,7 @@ var console = process.console;
 conn.pool.getConnection(function(err, connection) {
     // connected! (unless `err` is set)
     connection.query('select * from ged_societe',
-        function(err, rows, fields) {
+        function(err, rows) {
             if (err) {
                 console.log(err.code);
                 throw err;
@@ -50,7 +49,7 @@ exports.trait = function(liste, soc, path) {
             var traitFichierCallback = function(err, pos) {
                 if (err) throw err;
                 //lecture du code#
-                var barcodeCallback = function(error, stdout, stderr) {
+                var barcodeCallback = function(error) {
                     //if error retry
                     if (error) {
                         setTimeout(function() {
@@ -127,7 +126,7 @@ exports.trait = function(liste, soc, path) {
                         try {
                             //  'convert -verbose -density 150 -trim' + path + filename + "." + extension + '-quality 100 -flatten -sharpen 0x1.0' + path + filename + '.jpg'
                             //  'convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg'
-                            exec('convert -verbose -density 150 -trim ' + path + filename + "." + extension + ' -quality 100 -flatten -sharpen 0x1.0 ' + path + filename + '.jpg', function(error, stdout, stderr) {
+                            exec('convert -verbose -density 150 -trim ' + path + filename + "." + extension + ' -quality 100 -flatten -sharpen 0x1.0 ' + path + filename + '.jpg', function(error) {
                                 if (error) {
                                     console.error(error);
                                 }
@@ -155,7 +154,7 @@ exports.trait = function(liste, soc, path) {
                         callback(null, pos);
                     }
                 } else {
-                    var pos = {
+                    pos = {
                         "filename": entry,
                         "societe": soc,
                         "statut": 20,
@@ -188,23 +187,22 @@ new CronJob('0 */1 * * * *', function() {
         // connected! (unless `err` is set)
 
         connection.query('select CODEDI from ged_import where NOTOK = 0 GROUP BY CODEDI',
-            function(err, rowsoc, fields) {
+            function(err, rowsoc) {
                 if (err) {
                     console.error(err);
                 }
 
                 async.eachSeries(rowsoc, function(soc, callback) {
                         console.info(soc.CODEDI);
-                        var soc;
                         connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + soc.CODEDI + "' LIMIT 10",
-                            function(err, rows, fields) {
+                            function(err, rows) {
                                 if (err) {
                                     console.error(err);
                                 }
                                 var dataPos = [];
                                 async.eachSeries(rows, function(row, callback) {
                                         var download = function(uri, filename, callback) {
-                                            request.head(uri, function(err, res, body) {
+                                            request.head(uri, function(err, res) {
                                                 try {
                                                     switch (res.headers['content-type']) {
                                                         case "image/jpeg":
@@ -245,7 +243,7 @@ new CronJob('0 */1 * * * *', function() {
 
                                             callback();
 
-                                            connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + row.NUMEQUINOXE + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines, fields) {
+                                            connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + row.NUMEQUINOXE + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines) {
                                                 if (err) {
                                                     //norelease
                                                     //throw err;
@@ -276,7 +274,7 @@ new CronJob('0 */1 * * * *', function() {
 
                                                         dataPos.push(pos);
                                                     } else {
-                                                        connection.query('SELECT NOM_SOCIETE FROM societe WHERE COD_EDI = ?', [row.CODEDI], function(err, rows, fields) {
+                                                        connection.query('SELECT NOM_SOCIETE FROM societe WHERE COD_EDI = ?', [row.CODEDI], function(err, rows) {
                                                             if (err) {
                                                                 console.error(err);
                                                             }
@@ -288,7 +286,7 @@ new CronJob('0 */1 * * * *', function() {
                                                                 };
                                                                 societe.push(addsociete);
 
-                                                                connection.query('INSERT INTO ged_societe (societe_name, societe_CODEDI, societe_NEIF) VALUES (?, ?, ?)', [line.NOM_SOCIETE, row.CODEDI, "0"], function(err, result) {
+                                                                connection.query('INSERT INTO ged_societe (societe_name, societe_CODEDI, societe_NEIF) VALUES (?, ?, ?)', [line.NOM_SOCIETE, row.CODEDI, "0"], function(err) {
                                                                     if (err) {
                                                                         console.error(err);
                                                                     }
@@ -348,7 +346,6 @@ var archiveCallback = function(error, positions) {
 
 function archivage(results, path, dname, soc, callback) {
     var positions = [];
-    var asyncTasksEqui = [];
     var lastcodeb;
 
     results.forEach(function(pos) {
@@ -372,10 +369,11 @@ function archivage(results, path, dname, soc, callback) {
             }
             //TODO
             //creation du fichier LDS
+            archivageOldGed();
         } else {
             //get info equinox
             lastcodeb = pos.codeb;
-            var addpos = {
+            addpos = {
                 "numequinoxe": pos.codeb,
                 "numdoc": pos.numdoc,
                 "societe": pos.societe,
@@ -389,19 +387,19 @@ function archivage(results, path, dname, soc, callback) {
                 }]
             };
             positions.push(addpos);
-            //creation du fichier LDS
+            archivageOldGed();
         }
         fs.mkdir("archive/" + soc, function(e) {
             if (!e || (e && e.code === 'EEXIST')) {
                 fs.mkdir("archive/" + soc + "/" + dname, function(e) {
                     if (!e || (e && e.code === 'EEXIST')) {
-                        exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error, stdout, stderr) {
+                        exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error) {
                             if (error) {
                                 console.error(error);
                                 //throw err;
                             }
                             setTimeout(function() {
-                                fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err, stdout, stderr) {
+                                fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err) {
                                     if (err) {
                                         //pos.statut = "danger";
                                         //sock.majTrait(pos);
@@ -411,9 +409,14 @@ function archivage(results, path, dname, soc, callback) {
                                     }
 
                                     fs.stat(path + pos.filename, function(err, stats) {
+                                        if (err) {
+                                            console.error(err);
+                                        }
                                         if (stats != undefined) {
-                                            fs.unlink(path + pos.filename, function(err, stdout, stderr) {
-
+                                            fs.unlink(path + pos.filename, function(err) {
+                                                if (err) {
+                                                    console.error(err);
+                                                }
                                             })
                                         }
                                     });
@@ -432,13 +435,13 @@ function archivage(results, path, dname, soc, callback) {
         sock.majTrait(pos);
     });
     callback(null, positions);
-};
+}
 
 function insertBDD(positions) {
     var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
     conn.pool.getConnection(function(err, connection) {
         positions.forEach(function(item) {
-            connection.query('INSERT INTO ged_doc (numequinoxe, numdoc, societe, CODEDI, datescan, remettant, doc) VALUES (?, ?, ?, ? ,? ,? ,?)', [item.numequinoxe, item.numdoc, item.societe, item.CODEDI, date, item.remettant, JSON.stringify(item.doc)], function(err, result) {
+            connection.query('INSERT INTO ged_doc (numequinoxe, numdoc, societe, CODEDI, datescan, remettant, doc) VALUES (?, ?, ?, ? ,? ,? ,?)', [item.numequinoxe, item.numdoc, item.societe, item.CODEDI, date, item.remettant, JSON.stringify(item.doc)], function(err) {
                 if (err) {
                     //norelease
                     console.error(err);
@@ -477,7 +480,15 @@ function insertBDD(positions) {
     });
 }
 
-
+function archivageOldGed(file, data) {
+    //TODO
+    //creation du fichier LDS
+    // fs.writeFile(file, data, function(err) {
+    //     if (err) {
+    //         console.error(err);
+    //     }
+    // })
+}
 
 function traitRenvoie(ftp, item, soc, remettant) {
     var s = _.find(societe, {
@@ -485,15 +496,13 @@ function traitRenvoie(ftp, item, soc, remettant) {
     });
     if (s.ftp != "##NORETOUR") {
         var ftpJSON = _.replace(s.ftp, new RegExp("\\\\", "g"), "");
-        var ftp = JSON.parse(ftpJSON);
-
+        ftp = JSON.parse(ftpJSON);
         var c = new Client();
         c.on('ready', function() {
             var pdftojoin = "";
             switch (ftp.filetype) {
                 case "jpg":
                     // TODO: convert jpg to pdf
-
                     break;
                 case "pdf":
                     item.doc.forEach(function(row) {
@@ -501,7 +510,10 @@ function traitRenvoie(ftp, item, soc, remettant) {
                     });
                     //if multi true
                     if (ftp.multi) {
-                        exec('pdftk' + pdftojoin + " cat output temp/" + item.numequinoxe + ".pdf", function(error, stdout, stderr) {
+                        exec('pdftk' + pdftojoin + " cat output temp/" + item.numequinoxe + ".pdf", function(error) {
+                            if (error) {
+                                console.error(error);
+                            }
                             //put en fct de la ftp.nomenclature
                             putFtp(getNomenclatureFile(ftp.nomenclature, item));
 
@@ -516,30 +528,6 @@ function traitRenvoie(ftp, item, soc, remettant) {
                 default:
             }
         });
-
-        function putFtp(nomenclatureFile) {
-            c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
-                if (err) {
-                    console.error(err);
-                }
-                c.end();
-            });
-
-            if (remettant) {
-                //if item.remettant  want return, find ftp config and send
-                var r = _.find(societe, {
-                    'societe': item.remettant
-                });
-
-                if (r != undefined) {
-                    var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
-                    var ftpR = JSON.parse(ftpRJSON);
-                    if (ftpR.renvoieremettant) {
-                        traitRenvoie(ftp, item, item.remettant, false);
-                    }
-                }
-            }
-        }
 
         c.connect({
             host: ftp.host,
@@ -587,6 +575,30 @@ function getDname() {
     return ("0" + now.getDate()).slice(-2) + "_" + month[now.getMonth()] + "_" + now.getFullYear();
 }
 
+function putFtp(nomenclatureFile) {
+    c.put('temp/' + nomenclatureFile + '.pdf', nomenclatureFile + '.pdf', function(err) {
+        if (err) {
+            console.error(err);
+        }
+        c.end();
+    });
+
+    if (remettant) {
+        //if item.remettant  want return, find ftp config and send
+        var r = _.find(societe, {
+            'societe': item.remettant
+        });
+
+        if (r != undefined) {
+            var ftpRJSON = _.replace(r.ftp, new RegExp("\\\\", "g"), "");
+            var ftpR = JSON.parse(ftpRJSON);
+            if (ftpR.renvoieremettant) {
+                traitRenvoie(ftp, item, item.remettant, false);
+            }
+        }
+    }
+}
+
 function getNomenclatureFile(nomenclature, pos, index) {
     switch (nomenclature) {
         case "numequinoxe_date_remettant":
@@ -608,8 +620,13 @@ function getNomenclatureFile(nomenclature, pos, index) {
 
 function setError(path, filename, extension, soc, errCode) {
     fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
+        if (err) {
+            console.error(err);
+        }
         conn.pool.getConnection(function(err, connection) {
-
+            if (err) {
+                console.error(err);
+            }
             var schtrait = _.find(endtrait.traitementList, {
                 'soc': soc
             });
@@ -624,7 +641,7 @@ function setError(path, filename, extension, soc, errCode) {
             }
 
             var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
-            connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, soc, "noBarcode", date], function(err, result) {
+            connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, soc, "noBarcode", date], function(err) {
                 if (err) {
                     console.error(err);
                 }
@@ -665,7 +682,7 @@ function getInfo(numequinoxe, soc, path, filename, extension) {
 }
 //traitement de creation de societe
 
-exports.creationSociete = function(soc, CODEDI, NEIF) {
+exports.creationSociete = function(soc) {
     //ARCHIVE/SOCIETE
     fs.mkdir("archive/" + soc, function() {
         //ARCHIVE/SOCITE/ZIP
