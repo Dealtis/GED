@@ -204,7 +204,7 @@ fs.readFile('mail/error.html', function(err, html) {
             errCode: errCode
         }, function(err, info) {
             if (err) {
-                console.log('Error');
+                console.log('Error' + err);
             } else {
                 console.log('Error Msg sent');
             }

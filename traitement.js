@@ -21,13 +21,13 @@ conn.pool.getConnection(function(err, connection) {
                 throw err;
             }
             rows.forEach(function(row) {
-                    var addsociete = {
-                        "societe": row.societe_name,
-                        "CODEDI": row.societe_CODEDI,
-                        "NEIF": row.societe_NEIF
-                    };
-                    societe.push(addsociete);
-                })
+                var addsociete = {
+                    "societe": row.societe_name,
+                    "CODEDI": row.societe_CODEDI,
+                    "NEIF": row.societe_NEIF
+                };
+                societe.push(addsociete);
+            })
             connection.release();
         });
 });
@@ -47,16 +47,17 @@ exports.trait = function(liste, soc, path) {
             var traitFichierCallback = function(err, pos) {
                 if (err) throw err;
                 //lecture du code#
-                var barcodeCallback = function(error) {
+                var barcodeCallback = function(error, barcode) {
+                    console.log(barcode);
                     //if error retry
                     if (error) {
                         setTimeout(function() {
                             exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
                         }, 1000);
                         console.error(error);
-                        //callback(null);
+                        //callback(error);
                     } else {
-                        var trimstdout = _.trim(pos);
+                        var trimstdout = _.trim(barcode);
                         //console.log(trimstdout);
                         if (trimstdout.indexOf("POLE") > -1) {
                             var codeb = _.replace(trimstdout, 'POLE', '');
@@ -79,10 +80,15 @@ exports.trait = function(liste, soc, path) {
                                     console.error(err);
                                 }
                                 if (!(codeb == "noBarcodes")) {
-                                    getInfo(codeb, soc, path, filename, extension);
+                                    var getInfoCallback = function(err, pos) {
+                                        console.log(pos);
+                                        callback(null, pos);
+                                    };
+                                    getInfo(codeb, soc, path, filename, extension, pos, getInfoCallback);
                                 } else {
                                     pos.statut = 80;
                                     sock.majTrait(pos);
+                                    console.log(pos);
                                     callback(null, pos);
                                     connection.release();
                                 }
@@ -100,6 +106,7 @@ exports.trait = function(liste, soc, path) {
                             pos.statut = 80;
                             pos.codeb = "noBarcodes";
                             sock.majTrait(pos);
+                            console.log(pos);
                             callback(null, pos);
                         }
                     }
@@ -108,13 +115,17 @@ exports.trait = function(liste, soc, path) {
                 if (s.NEIF == 0) {
                     exec('php barcodereader.php ' + path + filename + '.jpg', barcodeCallback);
                 } else {
-                    //récupération du num equinox dans le filename
+                    //récupération du numequinoxe dans le filename
                     var filenameSplit = filename.split("-");
                     var codeb = filenameSplit[0];
                     pos.statut = 60;
                     pos.codeb = codeb;
                     sock.majTrait(pos);
-                    getInfo(codeb, soc, path, filename, extension);
+                    var getInfoCallback = function(err, pos) {
+                        console.log(pos);
+                        callback(null, pos);
+                    };
+                    getInfo(codeb, soc, path, filename, extension, pos, getInfoCallback);
                 }
             };
 
@@ -122,8 +133,6 @@ exports.trait = function(liste, soc, path) {
                 if (s.NEIF == 0) {
                     if (type == "pdf") {
                         try {
-                            //  'convert -verbose -density 150 -trim' + path + filename + "." + extension + '-quality 100 -flatten -sharpen 0x1.0' + path + filename + '.jpg'
-                            //  'convert  -density 300 ' + path + filename + "." + extension + ' -quality 100 ' + path + filename + '.jpg'
                             exec('convert -verbose -density 150 -trim ' + path + filename + "." + extension + ' -quality 100 -flatten -sharpen 0x1.0 ' + path + filename + '.jpg', function(error) {
                                 if (error) {
                                     console.error(error);
@@ -162,19 +171,15 @@ exports.trait = function(liste, soc, path) {
                     callback(null, pos);
                 }
             };
-
-
-
             traitFichier(extension, traitFichierCallback);
         });
     });
 
 
     async.parallel(asyncTasks, function(err, results) {
+        console.log("asyncTasks");
         var dname = getDname();
-
         archivage(results, path, dname, soc, archiveCallback);
-
         endtrait.end_traitement(soc);
     });
 }; //trait end
@@ -342,92 +347,92 @@ var archiveCallback = function(error, positions) {
 function archivage(results, path, dname, soc, callback) {
     var positions = [];
     var lastcodeb;
-
     results.forEach(function(pos) {
-        var filename = pos.filename.substring(0, pos.filename.length - 4);
-        var extension = pos.filename.slice(-3);
-
-        if (pos.codeb == "noBarcodes" || pos.codeb == lastcodeb) {
-            //get positions with numequinox == lastcodeb
-            var spos = _.find(positions, {
-                'numequinoxe': lastcodeb
-            });
-            if (spos != undefined) {
-                var addpos = {
-                    "filename": filename + ".pdf",
-                    "originFile": pos.filename,
-                    "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
-                };
-                spos.doc.push(addpos);
-            } else {
-                setError(path, filename, extension, soc, "noBarcode");
-            }
-            //TODO
-            //creation du fichier LDS
-            archivageOldGed();
-        } else {
-            //get info equinox
-            lastcodeb = pos.codeb;
-            addpos = {
-                "numequinoxe": pos.codeb,
-                "numdoc": pos.numdoc,
-                "societe": pos.societe,
-                "CODEDI": pos.CODEDI,
-                "datescan": pos.datetrait,
-                "remettant": pos.remettant,
-                "doc": [{
-                    "filename": filename + ".pdf",
-                    "originFile": pos.filename,
-                    "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
-                }]
-            };
-            positions.push(addpos);
-            archivageOldGed();
-        }
-        fs.mkdir("archive/" + soc, function(e) {
-            if (!e || (e && e.code === 'EEXIST')) {
-                fs.mkdir("archive/" + soc + "/" + dname, function(e) {
-                    if (!e || (e && e.code === 'EEXIST')) {
-                        exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error) {
-                            if (error) {
-                                console.error(error);
-                                //throw err;
-                            }
-                            setTimeout(function() {
-                                fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err) {
-                                    if (err) {
-                                        //pos.statut = "danger";
-                                        //sock.majTrait(pos);
-                                        //norelease
-                                        //console.log(err);
-                                        //throw err;
-                                    }
-
-                                    fs.stat(path + pos.filename, function(err, stats) {
-                                        if (err) {
-                                            console.error(err);
-                                        }
-                                        if (stats != undefined) {
-                                            fs.unlink(path + pos.filename, function(err) {
-                                                if (err) {
-                                                    console.error(err);
-                                                }
-                                            })
-                                        }
-                                    });
-                                })
-                            }, 2000);
-                        });
-
-                    } else {
-                        //debug
-                        console.error(e);
-                    }
+        if (pos != null) {
+            var filename = pos.filename.substring(0, pos.filename.length - 4);
+            var extension = pos.filename.slice(-3);
+            if (pos.codeb == "noBarcodes" || pos.codeb == lastcodeb) {
+                //get positions with numequinox == lastcodeb
+                var spos = _.find(positions, {
+                    'numequinoxe': lastcodeb
                 });
+                if (spos != undefined) {
+                    var addpos = {
+                        "filename": filename + ".pdf",
+                        "originFile": pos.filename,
+                        "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
+                    };
+                    spos.doc.push(addpos);
+                } else {
+                    setError(path, filename, extension, soc, "noBarcode");
+                }
+                //TODO
+                //creation du fichier LDS
+            } else {
+                //get info equinox
+                lastcodeb = pos.codeb;
+                addpos = {
+                    "numequinoxe": pos.codeb,
+                    "numdoc": pos.numdoc,
+                    "societe": pos.societe,
+                    "CODEDI": pos.CODEDI,
+                    "datescan": pos.datetrait,
+                    "remettant": pos.remettant,
+                    "doc": [{
+                        "filename": filename + ".pdf",
+                        "originFile": pos.filename,
+                        "url": "archive/" + soc + "/" + dname + "/" + filename + ".pdf"
+                    }]
+                };
+                positions.push(addpos);
+                archivageOldGed();
             }
-        });
-        pos.statut = 90;
-        sock.majTrait(pos);
+
+            fs.mkdir("archive/" + soc, function(e) {
+                if (!e || (e && e.code === 'EEXIST')) {
+                    fs.mkdir("archive/" + soc + "/" + dname, function(e) {
+                        if (!e || (e && e.code === 'EEXIST')) {
+                            exec('convert -density 150 ' + path + pos.filename + ' -quality 100 ' + path + filename + ".pdf", function(error) {
+                                if (error) {
+                                    console.error(error);
+                                    //throw err;
+                                }
+                                setTimeout(function() {
+                                    fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err) {
+                                        if (err) {
+                                            //pos.statut = "danger";
+                                            //sock.majTrait(pos);
+                                            //norelease
+                                            //console.log(err);
+                                            //throw err;
+                                        }
+
+                                        fs.stat(path + pos.filename, function(err, stats) {
+                                            if (err) {
+                                                console.error(err);
+                                            }
+                                            if (stats != undefined) {
+                                                fs.unlink(path + pos.filename, function(err) {
+                                                    if (err) {
+                                                        console.error(err);
+                                                    }
+                                                })
+                                            }
+                                        });
+                                    })
+                                }, 2000);
+                            });
+
+                        } else {
+                            //debug
+                            console.error(e);
+                        }
+                    });
+                }
+            });
+            pos.statut = 90;
+            sock.majTrait(pos);
+        }
     });
     callback(null, positions);
 }
@@ -614,7 +619,7 @@ function getNomenclatureFile(nomenclature, pos, index) {
 }
 
 function setError(path, filename, extension, soc, errCode) {
-    fs.rename(path + filename + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
+    fs.rename(path + filename + "." + extension, 'erreur/' + soc + '/' + filename + '_err.' + extension, function(err) {
         if (err) {
             console.error(err);
         }
@@ -648,34 +653,34 @@ function setError(path, filename, extension, soc, errCode) {
     })
 }
 
-function getInfo(numequinoxe, soc, path, filename, extension) {
-    conn.pool.getConnection(function(err, connection) {
-        // connected! (unless `err` is set)
-        if (err) {
-            throw err;
-        }
-
-        connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + numequinoxe + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines) {
+var getInfo = function(numequinoxe, soc, path, filename, extension, pos, callback) {
+        conn.pool.getConnection(function(err, connection) {
+          console.log();
+            // connected! (unless `err` is set)
             if (err) {
-                console.error(err);
+                throw err;
             }
-            if (lines != 0) {
-                pos.numdoc = lines[0].NUM_DOC;
-                pos.CODEDI = s.CODEDI;
-                pos.remettant = lines[0].PROPRIETE;
-                pos.statut = 80;
-                sock.majTrait(pos);
-                callback(null, pos);
-            } else {
-                console.error("Informations introuvable pour " + numequinoxe + " de " + soc);
-                setError(path, filename, extension, soc, "noInformation");
-            }
+            connection.query('SELECT s2.`PROPRIETE`,s2.`NUM_DOC` FROM search_doc s1 INNER JOIN search_doc s2 ON s1.`NUM_DOC` = s2.`NUM_DOC` WHERE s1.`PROPRIETE` = "' + numequinoxe + '" AND s2.`NUM_CHAMPS`=12;', function(err, lines) {
+                if (err) {
+                    console.error(err);
+                }
+                if (lines != 0) {
+                    pos.numdoc = lines[0].NUM_DOC;
+                    pos.CODEDI = soc.CODEDI;
+                    pos.remettant = lines[0].PROPRIETE;
+                    pos.statut = 80;
+                    sock.majTrait(pos);
+                    callback(null, pos);
+                } else {
+                    console.error("Informations introuvable pour " + numequinoxe + " de " + soc);
+                    setError(path, filename, extension, soc, "noInformation");
+                }
 
-            connection.release();
+                connection.release();
+            });
         });
-    });
-}
-//traitement de creation de societe
+    }
+    //traitement de creation de societe
 
 exports.creationSociete = function(soc) {
     //ARCHIVE/SOCIETE
