@@ -399,13 +399,7 @@ function archivage(results, path, dname, soc, callback) {
                                 }
                                 setTimeout(function() {
                                     fs.rename(path + filename + ".pdf", "archive/" + soc + "/" + dname + "/" + filename + ".pdf", function(err) {
-                                        if (err) {
-                                            //pos.statut = "danger";
-                                            //sock.majTrait(pos);
-                                            //norelease
-                                            //console.log(err);
-                                            //throw err;
-                                        }
+                                        if (err) {}
 
                                         fs.stat(path + pos.filename, function(err, stats) {
                                             if (err) {
@@ -655,7 +649,7 @@ function setError(path, filename, extension, soc, errCode) {
 
 var getInfo = function(numequinoxe, soc, path, filename, extension, pos, callback) {
         conn.pool.getConnection(function(err, connection) {
-          console.log();
+            console.log();
             // connected! (unless `err` is set)
             if (err) {
                 throw err;
