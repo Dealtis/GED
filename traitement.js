@@ -4,12 +4,11 @@ var Client = require('ftp');
 const fs = require('fs');
 var CronJob = require('cron').CronJob;
 var exec = require('child_process').exec;
-
 var request = require('request');
-
 var conn = require('./conn');
 var sock = require('./server');
 var endtrait = require('./app');
+
 //societe
 var societe = [];
 var console = process.console;
@@ -29,7 +28,6 @@ conn.pool.getConnection(function(err, connection) {
                     };
                     societe.push(addsociete);
                 })
-                //console.log(societe);
             connection.release();
         });
 });
@@ -58,7 +56,7 @@ exports.trait = function(liste, soc, path) {
                         console.error(error);
                         //callback(null);
                     } else {
-                        var trimstdout = _.trim(stdout);
+                        var trimstdout = _.trim(pos);
                         //console.log(trimstdout);
                         if (trimstdout.indexOf("POLE") > -1) {
                             var codeb = _.replace(trimstdout, 'POLE', '');
@@ -185,13 +183,11 @@ new CronJob('0 */1 * * * *', function() {
     console.info("Téléchargement des fichers commencer");
     conn.pool.getConnection(function(err, connection) {
         // connected! (unless `err` is set)
-
         connection.query('select CODEDI from ged_import where NOTOK = 0 GROUP BY CODEDI',
             function(err, rowsoc) {
                 if (err) {
                     console.error(err);
                 }
-
                 async.eachSeries(rowsoc, function(soc, callback) {
                         console.info(soc.CODEDI);
                         connection.query("select * from ged_import where NOTOK = 0 AND CODEDI = '" + soc.CODEDI + "' LIMIT 10",
@@ -229,7 +225,6 @@ new CronJob('0 */1 * * * *', function() {
                                                             console.log("ERROR:" + err);
                                                             //TODO if error send error
                                                             //sock.sendErrorMsg();
-
                                                         })).on('close', callback(null, filenameFormat));
 
                                                 } catch (e) {
