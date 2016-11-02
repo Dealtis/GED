@@ -70,7 +70,7 @@ var mailData = {
 
 //server
 app.use(express.static('release'));
-console.log("(▀¯▀) GED POLE START (▀¯▀)");
+console.log("(▀¯▀) GED POLE START v1.1.0(▀¯▀)");
 
 
 var server = app.listen(3030, function() {});

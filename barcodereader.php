@@ -1,6 +1,4 @@
 <?php
-
-
 $fileName = $argv[1];
 try {
 	$Ci = new COM("ClearImage.ClearImage");
@@ -57,14 +55,12 @@ try {
           $reader->Image->Open($fileName);
           $BCcount = $reader->Find(0);
 
-
           if ($BCcount > 0) {
             for ($i=1;$i<=$BCcount;$i++) {
               $Bc = $reader->BarCodes($i);
               echo "$Bc->Text";
             }
           }else {
-
             $reader = $Ci->CreateBarcodePro();
           	$cibfCode39 = 2; $cibfCode128 = 4;
           	$reader->Type = $cibfCode39 + $cibfCode128;
