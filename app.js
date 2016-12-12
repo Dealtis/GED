@@ -1,6 +1,7 @@
 var chokidar = require('chokidar');
 var DecompressZip = require('decompress-zip');
-const fs = require('fs');
+var fs = require('fs'),
+    path = require('path');
 var conn = require('./conn');
 var sock = require('./server');
 var _ = require('lodash');
@@ -33,12 +34,12 @@ try {
                 deZip(path);
             }
             if (_.endsWith(path, '.pdf')) {
-                if (!(_.endsWith(path, '_tr.pdf') || _.endsWith(path, '_err.pdf'))) {
+                if (!(_.includes(path, '_tr') || _.endsWith(path, '_err.pdf'))) {
                     splitPdf(path);
                 }
             }
             if (_.endsWith(path, '.jpg') || _.endsWith(path, '.JPG') || _.endsWith(path, '.JPEG') || _.endsWith(path, '.tif')) {
-                if (_.endsWith(path, '_tr.jpg') || _.endsWith(path, '_tr.JPG')) {} else {
+                if (!(_.endsWith(path, '_tr.jpg') || _.includes(path, '_tr'))) {
                     splitJpg(path);
                 }
             }
@@ -47,38 +48,6 @@ try {
             if (_.endsWith(path, '.zip')) {
                 var pathSplit = path.split('\\');
                 setTimeout(function() {
-                    function full_tr_func(pathSplit) {
-                        fs.readdir(pathSplit[0] + '/' + pathSplit[1] + '/', function(err) {
-                            if (err) {
-                                console.log("readir" + err);
-                            }
-                            var soc = pathSplit[1];
-
-                            //search if trait exist
-                            var schtrait = _.find(traitementList, {
-                                'soc': soc
-                            });
-                            //console.log(schtrait);
-                            if (schtrait == undefined) {
-
-                                //push array traitement
-                                var addtrait = {
-                                    'soc': soc,
-                                    'zips': [{
-                                        "zipname": pathSplit[2]
-                                    }]
-                                };
-                                traitementList.push(addtrait);
-                                scan_tr(pathSplit);
-
-                            } else {
-                                //add zip to traitement
-                                schtrait.zips.push({
-                                    "zipname": pathSplit[2]
-                                });
-                            }
-                        });
-                    }
                     full_tr_func(pathSplit);
                 }, 8000);
             }
@@ -86,6 +55,57 @@ try {
 } catch (e) {
     console.log(e);
     console.log("Erreur sur watch file");
+}
+
+function full_tr_func(pathSplit) {
+    fs.readdir(pathSplit[0] + '/' + pathSplit[1] + '/', function(err) {
+        if (err) {
+            console.log("readir" + err);
+        }
+        var soc = pathSplit[1];
+
+        //search if trait exist
+        var schtrait = _.find(traitementList, {
+            'soc': soc
+        });
+        if (schtrait == undefined) {
+            //push array traitement
+            var addtrait = {
+                'soc': soc,
+                'zips': [{
+                    "zipname": pathSplit[2]
+                }]
+            };
+            traitementList.push(addtrait);
+            scan_tr(pathSplit);
+        } else {
+            //add zip to traitement
+            schtrait.zips.push({
+                "zipname": pathSplit[2]
+            });
+        }
+    });
+}
+
+function getDirectories(srcpath) {
+    return fs.readdirSync(srcpath).filter(function(file) {
+        return fs.statSync(path.join(srcpath, file)).isDirectory();
+    });
+}
+
+exports.onRestart = function() {
+    //check if there is file to trait
+    var listDirectories = getDirectories("reception");
+    listDirectories.forEach(function(societe) {
+        fs.readdir(`reception/${societe}`, (err, files) => {
+            if (files.length > 0) {
+                console.log(`${societe} got files`);
+                var path = `reception\\${societe}`;
+                var pathSplit = path.split('\\');
+                full_tr_func(pathSplit);
+            }
+        })
+    });
 }
 
 function scan_tr(pathSplit) {
@@ -101,7 +121,7 @@ function scan_tr(pathSplit) {
             data.forEach(function(entry) {
                 var extension = entry.slice(-3);
                 if (!(_.endsWith(entry, '_err.' + extension))) {
-                    if (!(_.endsWith(entry, '_tr.' + extension))) {
+                    if (!(_.includes(entry, '_tr'))) {
                         full_tr = false;
                     }
                 } else {
@@ -123,7 +143,7 @@ function scan_tr(pathSplit) {
 }
 
 exports.end_traitement = function(societe) {
-     _.remove(traitementList, function(n) {
+    _.remove(traitementList, function(n) {
         return n.soc == societe;
     });
     console.info("Fin traitement :" + societe);
@@ -146,7 +166,7 @@ function deZip(path) {
                 var unzipper = new DecompressZip(path)
                 unzipper.on('error', function(err) {
                     console.log('Caught an error');
-                    console.log(err);
+                    console.log(err + path);
                 });
                 unzipper.on('extract', function() {
                     console.log('Finished extracting');
@@ -209,8 +229,7 @@ function splitPdf(path) {
                 sock.majTrait(pos);
                 fs.rename(pathSplit[0] + '/' + pathSplit[1] + '/' + filename + '.' + extension, 'erreur/' + pathSplit[1] + '/' + filename + '_err.' + extension, function(err) {
                     if (err) {
-                        console.log(err);
-                        //throw err;
+                        console.error(err);
                     }
                 })
                 conn.pool.getConnection(function(err, connection) {
@@ -232,9 +251,9 @@ function splitPdf(path) {
                     var date = new Date().toISOString().slice(0, 19).replace('T', ' ');
                     connection.query('INSERT INTO ged_erreur (filename, zipfile, societe, errCode, dateerreur) VALUES (?, ?, ?, ?, ?)', [filename + '_err.' + extension, zip, pathSplit[1], "pdftk", date], function(err) {
                         if (err) {
-                            console.log(err);
+                            console.error(err);
                         }
-                        sock.sendErrorMsg(pathSplit[1], "pdftk");
+                        sock.sendErrorMsg(pathSplit[1], "pdftk", err);
                     });
                     connection.release();
                 });
@@ -242,11 +261,10 @@ function splitPdf(path) {
                 setTimeout(function() {
                     fs.unlink(path, (err) => {
                         if (err) {
-                            throw err;
+                            console.error(err);
                         }
                     });
                 }, 300);
-
             }
         });
 }
